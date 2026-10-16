@@ -1,6 +1,0 @@
-streamlit
-pdfplumber
-pypdf
-openpyxl
-pandas
-regex
