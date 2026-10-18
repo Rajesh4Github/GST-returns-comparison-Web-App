@@ -1,8 +1,7 @@
 import os
 import streamlit as st
 import pandas as pd
-from backend import execute_unified_consolidation
-#from backend import execute_final_consolidation as execute_unified_consolidation
+from backend import execute_final_consolidation as execute_unified_consolidation
 
 st.set_page_config(
     page_title="GST Returns Comparison & Audit App",
