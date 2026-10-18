@@ -144,65 +144,69 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
 
         # 7. B2C Credit Notes Audit
     b2c_rows = []
-    for m in df_g1.columns:
-        if m in ["Source File"]:
-            continue
-        credit_val = df_g1.loc[df_g1["Table Section"].str.contains("B2CS", case=False, na=False), m].sum()
-        b2c_rows.append({
-            "Period": m,
-            "B2C Credit Note Value": credit_val,
-            "Tax Impact": credit_val * 0.18,
-            "Deviation": 0,
-            "Status": "Clean"
-        })
+    if not df_g1.empty and "Table Section" in df_g1.columns:
+        for m in df_g1.columns:
+            if m in ["Source File"]:
+                continue
+            credit_val = df_g1.loc[df_g1["Table Section"].str.contains("B2CS", case=False, na=False), m].sum()
+            b2c_rows.append({
+                "Period": m,
+                "B2C Credit Note Value": credit_val,
+                "Tax Impact": credit_val * 0.18,
+                "Deviation": 0,
+                "Status": "Clean"
+            })
     output_sheets["7. B2C Credit Notes Audit"] = pd.DataFrame(b2c_rows)
 
     # 8. Unregistered Remittance
     unreg_rows = []
-    for m in df_g1.columns:
-        if m in ["Source File"]:
-            continue
-        unreg_val = df_g1.loc[df_g1["Table Section"].str.contains("Unregistered", case=False, na=False), m].sum()
-        unreg_rows.append({
-            "Period": m,
-            "Unregistered Supplies": unreg_val,
-            "Tax Remitted": unreg_val * 0.18,
-            "Deviation": 0,
-            "Status": "Clean"
-        })
+    if not df_g1.empty and "Table Section" in df_g1.columns:
+        for m in df_g1.columns:
+            if m in ["Source File"]:
+                continue
+            unreg_val = df_g1.loc[df_g1["Table Section"].str.contains("Unregistered", case=False, na=False), m].sum()
+            unreg_rows.append({
+                "Period": m,
+                "Unregistered Supplies": unreg_val,
+                "Tax Remitted": unreg_val * 0.18,
+                "Deviation": 0,
+                "Status": "Clean"
+            })
     output_sheets["8. Unregistered Remittance"] = pd.DataFrame(unreg_rows)
 
     # 9. E-Way Bill vs Liability
     eway_rows = []
-    for m in df_g3b.columns:
-        if m in ["Source File"]:
-            continue
-        liability = df_g3b.loc[df_g3b["HEADING"].str.contains("Outward taxable supplies", case=False, na=False), m].sum()
-        eway_val = df_g1.loc[df_g1["Table Section"].str.contains("E-Way", case=False, na=False), m].sum()
-        eway_rows.append({
-            "Period": m,
-            "GSTR-3B Tax Liability": liability,
-            "E-Way Bill Clearances": eway_val,
-            "Deviation": liability - eway_val,
-            "Status": "Matched" if abs(liability - eway_val) < 100 else "Mismatch"
-        })
+    if not df_g3b.empty and "HEADING" in df_g3b.columns and not df_g1.empty and "Table Section" in df_g1.columns:
+        for m in df_g3b.columns:
+            if m in ["Source File"]:
+                continue
+            liability = df_g3b.loc[df_g3b["HEADING"].str.contains("Outward taxable supplies", case=False, na=False), m].sum()
+            eway_val = df_g1.loc[df_g1["Table Section"].str.contains("E-Way", case=False, na=False), m].sum()
+            eway_rows.append({
+                "Period": m,
+                "GSTR-3B Tax Liability": liability,
+                "E-Way Bill Clearances": eway_val,
+                "Deviation": liability - eway_val,
+                "Status": "Matched" if abs(liability - eway_val) < 100 else "Mismatch"
+            })
     output_sheets["9. E-Way Bill vs Liability"] = pd.DataFrame(eway_rows)
 
     # 10. Delayed Interest Audit
     interest_rows = []
-    for m in df_g3b.columns:
-        if m in ["Source File"]:
-            continue
-        days_late = df_g3b.loc[df_g3b["Details / Field"].str.contains("days late", case=False, na=False), m].sum()
-        cash_tax = df_g3b.loc[df_g3b["Details / Field"].str.contains("Cash", case=False, na=False), m].sum()
-        calc_interest = round(cash_tax * 0.18 * (days_late / 365.0), 2) if days_late > 0 else 0.0
-        interest_rows.append({
-            "Period": m,
-            "Days Delayed": days_late,
-            "Net Cash Tax Paid": cash_tax,
-            "Interest Payable (18%)": calc_interest,
-            "Status": "Action Needed" if calc_interest > 0 else "Satisfactory"
-        })
+    if not df_g3b.empty and "Details / Field" in df_g3b.columns:
+        for m in df_g3b.columns:
+            if m in ["Source File"]:
+                continue
+            days_late = df_g3b.loc[df_g3b["Details / Field"].str.contains("days late", case=False, na=False), m].sum()
+            cash_tax = df_g3b.loc[df_g3b["Details / Field"].str.contains("Cash", case=False, na=False), m].sum()
+            calc_interest = round(cash_tax * 0.18 * (days_late / 365.0), 2) if days_late > 0 else 0.0
+            interest_rows.append({
+                "Period": m,
+                "Days Delayed": days_late,
+                "Net Cash Tax Paid": cash_tax,
+                "Interest Payable (18%)": calc_interest,
+                "Status": "Action Needed" if calc_interest > 0 else "Satisfactory"
+            })
     output_sheets["10. Delayed Interest Audit"] = pd.DataFrame(interest_rows)
 
     # --- Summary Dashboard ---
