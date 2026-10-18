@@ -49,14 +49,24 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
     print("⚙️ Compiling GSTR-1...")
     g1_path = os.path.join(data_dir, "GSTR1_Consolidated_Schedules_SingleSheet.xlsx")
     if os.path.exists(g1_path):
-        output_sheets["GSTR-1 Summary (12M)"] = pd.read_excel(g1_path)
+        try:
+            output_sheets["GSTR-1 Summary (12M)"] = pd.read_excel(g1_path)
+        except Exception:
+            output_sheets["GSTR-1 Summary (12M)"] = pd.DataFrame(columns=["Table Section", "Details / Field"] + MONTHS + ["FY TOTAL"])
     else:
-        # Fallback layout matching your GSTR-1 summary structure
+        # Exact GSTR-1 39-row layout matching Colab
         g1_layout = [
             ("4A - B2B Regular", "Taxable Value"), ("4A - B2B Regular", "IGST"), ("4A - B2B Regular", "CGST"), ("4A - B2B Regular", "SGST"), ("4A - B2B Regular", "Cess"),
-            ("7 - B2CS (Others)", "Net Value"), ("7 - B2CS (Others)", "IGST"), ("7 - B2CS (Others)", "CGST"), ("7 - B2CS (Others)", "SGST"), ("7 - B2CS (Others)", "Cess")
+            ("4B - B2B Reverse Charge", "Taxable Value"), ("4B - B2B Reverse Charge", "IGST"), ("4B - B2B Reverse Charge", "CGST"), ("4B - B2B Reverse Charge", "SGST"), ("4B - B2B Reverse Charge", "Cess"),
+            ("5 - B2CL (Large)", "Taxable Value"), ("5 - B2CL (Large)", "IGST"), ("5 - B2CL (Large)", "Cess"),
+            ("6A - Exports", "Value"), ("6A - Exports", "IGST"), ("6A - Exports", "Cess"),
+            ("6B - SEZ Supplies", "Value"), ("6B - SEZ Supplies", "IGST"), ("6B - SEZ Supplies", "CGST"), ("6B - SEZ Supplies", "SGST"), ("6B - SEZ Supplies", "Cess"),
+            ("6C - Deemed Exports", "Value"), ("6C - Deemed Exports", "IGST"), ("6C - Deemed Exports", "CGST"), ("6C - Deemed Exports", "SGST"), ("6C - Deemed Exports", "Cess"),
+            ("7 - B2CS (Others)", "Net Value"), ("7 - B2CS (Others)", "IGST"), ("7 - B2CS (Others)", "CGST"), ("7 - B2CS (Others)", "SGST"), ("7 - B2CS (Others)", "Cess"),
+            ("8 - Nil Rated, Exempted & Non-GST", "Nil Rated Value"), ("8 - Nil Rated, Exempted & Non-GST", "Exempted Value"), ("8 - Nil Rated, Exempted & Non-GST", "Non-GST Value"),
+            ("Total Liability (Outward supplies other than Reverse charge)", "Taxable Value"), ("Total Liability (Outward supplies other than Reverse charge)", "IGST"), ("Total Liability (Outward supplies other than Reverse charge)", "CGST"), ("Total Liability (Outward supplies other than Reverse charge)", "SGST"), ("Total Liability (Outward supplies other than Reverse charge)", "Cess")
         ]
-        df_g1 = pd.DataFrame([{"Table Section": h, "Details / Field": f, **{m: np.random.uniform(50000, 400000) for m in MONTHS}} for h, f in g1_layout])
+        df_g1 = pd.DataFrame([{"Table Section": h, "Details / Field": f, **{m: 0.0 for m in MONTHS}} for h, f in g1_layout])
         df_g1["FY TOTAL"] = df_g1[MONTHS].sum(axis=1)
         output_sheets["GSTR-1 Summary (12M)"] = df_g1
 
@@ -64,7 +74,10 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
     print("⚙️ Compiling GSTR-2B...")
     g2b_path = os.path.join(data_dir, "GSTR2B_Consolidated_Schedules_SingleSheet.xlsx")
     if os.path.exists(g2b_path):
-        output_sheets["GSTR-2B Summary (12M)"] = pd.read_excel(g2b_path)
+        try:
+            output_sheets["GSTR-2B Summary (12M)"] = pd.read_excel(g2b_path)
+        except Exception:
+            output_sheets["GSTR-2B Summary (12M)"] = pd.DataFrame(columns=["Table Section", "Details / Field"] + MONTHS + ["FY TOTAL"])
     else:
         g2b_layout = [
             ("3. ITC Available - Part A (All Other ITC - 4(A)(5))", "Integrated Tax (IGST)"),
@@ -84,7 +97,7 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
             ("6. ITC Rejected - Part A (IMS Rejected)", "State/UT Tax (SGST)"),
             ("6. ITC Rejected - Part A (IMS Rejected)", "Cess")
         ]
-        df_g2b = pd.DataFrame([{"Table Section": h, "Details / Field": f, **{m: np.random.uniform(20000, 300000) if "Part A" in h else 0.0 for m in MONTHS}} for h, f in g2b_layout])
+        df_g2b = pd.DataFrame([{"Table Section": h, "Details / Field": f, **{m: 0.0 for m in MONTHS}} for h, f in g2b_layout])
         df_g2b["FY TOTAL"] = df_g2b[MONTHS].sum(axis=1)
         output_sheets["GSTR-2B Summary (12M)"] = df_g2b
 
@@ -92,7 +105,10 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
     print("⚙️ Compiling GSTR-3B...")
     g3b_path = os.path.join(data_dir, "GSTR3B_Consolidated_Schedules_SingleSheet.xlsx")
     if os.path.exists(g3b_path):
-        output_sheets["GSTR-3B Summary (12M)"] = pd.read_excel(g3b_path)
+        try:
+            output_sheets["GSTR-3B Summary (12M)"] = pd.read_excel(g3b_path)
+        except Exception:
+            output_sheets["GSTR-3B Summary (12M)"] = pd.DataFrame(columns=["HEADING", "Details / Field"] + MONTHS + ["FY TOTAL"])
     else:
         g3b_headings = [
             ("3.1 (a) Outward taxable supplies (other than zero rated, nil rated and exempted)", ["Taxable Value", "IGST", "CGST", "SGST", "CESS"]),
@@ -109,12 +125,12 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
         g3b_rows = []
         for h, fields in g3b_headings:
             for f in fields:
-                g3b_rows.append({"HEADING": h, "Details / Field": f, **{m: np.random.uniform(50000, 300000) if f != "No. of days late" else 0.0 for m in MONTHS}})
+                g3b_rows.append({"HEADING": h, "Details / Field": f, **{m: 0.0 for m in MONTHS}})
         df_g3b = pd.DataFrame(g3b_rows)
         df_g3b["FY TOTAL"] = df_g3b[MONTHS].sum(axis=1)
         output_sheets["GSTR-3B Summary (12M)"] = df_g3b
 
-    # --- Parse & Extract GSTR-9 (2 Year Summary) ---
+    # --- Parse & Extract GSTR-9 ---
     print("⚙️ Scanning & extracting GSTR-9 PDFs...")
     g9_records = []
     g9_files = glob.glob(os.path.join(data_dir, "GSTR9_*.pdf")) + glob.glob("GSTR9_*.pdf")
@@ -135,18 +151,13 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
                     if match_rev: data["Table 7I - Total ITC Reversed"] = float(match_rev.group(1).replace(",", ""))
         except Exception as e:
             print(f"Error parsing GSTR-9: {e}")
-        
-        if data["Table 6A - Total ITC Availed"] == 0.0:
-            data["Table 6A - Total ITC Availed"] = 3476462.51 if fy == "2023-24" else 3370543.05
-        if data["Table 7I - Total ITC Reversed"] == 0.0:
-            data["Table 7I - Total ITC Reversed"] = 12000.0 if fy == "2023-24" else 14500.0
         g9_records.append(data)
 
     df_g9 = pd.DataFrame(g9_records) if g9_records else pd.DataFrame({
         "Financial Year": ["2023-24", "2024-25"],
-        "Table 4 - B2B Supplies": [714229.0, 4651428.0],
-        "Table 6A - Total ITC Availed": [3476462.51, 3370543.05],
-        "Table 7I - Total ITC Reversed": [12000.0, 14500.0]
+        "Table 4 - B2B Supplies": [0.0, 0.0],
+        "Table 6A - Total ITC Availed": [0.0, 0.0],
+        "Table 7I - Total ITC Reversed": [0.0, 0.0]
     })
     output_sheets["GSTR-9 Summary (2 Year)"] = df_g9
 
@@ -158,7 +169,7 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
     # 1. ITC Supplier Recon (3B vs 2B)
     recon_rows = []
     for m in MONTHS:
-        g3b_val = df_g3b_curr.loc[(df_g3b_curr["HEADING"].str.contains("All other ITC|ITC Available", case=False, na=False)) & (df_g3b_curr["Details / Field"] == "IGST"), m] if not df_g3b_curr.empty and "HEADING" in df_g3b_curr.columns else []
+        g3b_val = df_g3b_curr.loc[(df_g3b_curr["HEADING"].str.contains("ITC Available|All other ITC", case=False, na=False)) & (df_g3b_curr["Details / Field"] == "IGST"), m] if not df_g3b_curr.empty and "HEADING" in df_g3b_curr.columns else []
         g3b = float(g3b_val.values[0]) if len(g3b_val) > 0 else 0.0
         g2b_val = df_g2b_curr.loc[(df_g2b_curr["Table Section"].str.contains("4\\(A\\)\\(5\\)", case=False, na=False)) & (df_g2b_curr["Details / Field"].str.contains("IGST|Integrated Tax", case=False, na=False)), m] if not df_g2b_curr.empty and "Table Section" in df_g2b_curr.columns else []
         g2b = float(g2b_val.values[0]) if len(g2b_val) > 0 else 0.0
