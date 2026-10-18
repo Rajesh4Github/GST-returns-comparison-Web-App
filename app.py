@@ -1,7 +1,7 @@
 import os
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
+import altair as alt
 from backend import execute_unified_consolidation
 
 st.set_page_config(
@@ -64,15 +64,26 @@ with tab_summary:
             for i, row in df_summary.iterrows():
                 cols[i].metric(label=row["Metric"], value=row["Value"])
 
-            # Charts
-            st.markdown("### 📈 Monthly Deviations (ITC Supplier Recon)")
+            # Charts: Monthly deviations from ITC Supplier Recon
             if "1. ITC Supplier Recon" in xls.sheet_names:
                 df_recon = pd.read_excel(xls, sheet_name="1. ITC Supplier Recon")
-                fig, ax = plt.subplots(figsize=(10,4))
-                ax.bar(df_recon["Period"], df_recon["Deviation"], color="orange")
-                ax.set_ylabel("Deviation")
-                ax.set_title("Excess ITC Availment vs 2B")
-                st.pyplot(fig)
+                chart = alt.Chart(df_recon).mark_bar(color="orange").encode(
+                    x=alt.X("Period", sort=None),
+                    y="Deviation",
+                    tooltip=["Period", "Deviation", "Risk Status"]
+                ).properties(title="Excess ITC Availment vs 2B")
+                st.altair_chart(chart, use_container_width=True)
+
+            # Charts: ITC composition pie chart
+            if "GSTR-2B Summary (12M)" in xls.sheet_names:
+                df_itc = pd.read_excel(xls, sheet_name="GSTR-2B Summary (12M)")
+                totals = df_itc.groupby("Details / Field").sum(numeric_only=True).reset_index()
+                pie = alt.Chart(totals).mark_arc().encode(
+                    theta="FY TOTAL",
+                    color="Details / Field",
+                    tooltip=["Details / Field", "FY TOTAL"]
+                ).properties(title="ITC Composition (2B)")
+                st.altair_chart(pie, use_container_width=True)
 
 # ---------------- Detailed Analytics Tab ----------------
 with tab_analytics:
