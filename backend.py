@@ -122,11 +122,26 @@ def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xls
             full_text = "\n".join([p.extract_text() for p in reader.pages if p.extract_text()])
             col = get_month_key_precise(os.path.basename(f_path)) or get_month_key(os.path.basename(f_path), full_text)
             if col and col != "UNKNOWN":
-                match_itc = re.search(r"3\..*?All Other ITC.*?([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)", full_text, re.DOTALL | re.IGNORECASE)
-                if match_itc:
-                    vals = [clean_value(match_itc.group(i)) for i in range(1, 5)]
+                # Extract Table 3 Part A
+                match_itc_a = re.search(r"3\..*?All Other ITC.*?([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)", full_text, re.DOTALL | re.IGNORECASE)
+                if match_itc_a:
+                    vals = [clean_value(match_itc_a.group(i)) for i in range(1, 5)]
                     for f_name, val in zip(["Integrated Tax (IGST)", "Central Tax (CGST)", "State/UT Tax (SGST)", "Cess"], vals):
                         df_g2b.loc[(df_g2b["Table Section"].str.contains("4\\(A\\)\\(5\\)")) & (df_g2b["Details / Field"] == f_name), col] = val
+
+                # Extract Table 3 Part B (Credit Notes)
+                match_itc_b = re.search(r"Credit Notes.*?([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)", full_text, re.DOTALL | re.IGNORECASE)
+                if match_itc_b:
+                    vals = [clean_value(match_itc_b.group(i)) for i in range(1, 5)]
+                    for f_name, val in zip(["Integrated Tax (IGST)", "Central Tax (CGST)", "State/UT Tax (SGST)", "Cess"], vals):
+                        df_g2b.loc[(df_g2b["Table Section"].str.contains("Credit Notes")) & (df_g2b["Details / Field"] == f_name), col] = val
+
+                # Extract Table 4 (ITC Not Available)
+                match_t4 = re.search(r"4\..*?Not Available.*?([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)", full_text, re.DOTALL | re.IGNORECASE)
+                if match_t4:
+                    vals = [clean_value(match_t4.group(i)) for i in range(1, 5)]
+                    for f_name, val in zip(["Integrated Tax (IGST)", "Central Tax (CGST)", "State/UT Tax (SGST)", "Cess"], vals):
+                        df_g2b.loc[(df_g2b["Table Section"].str.contains("Not Available")) & (df_g2b["Details / Field"] == f_name), col] = val
         except Exception:
             pass
 
@@ -161,6 +176,14 @@ def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xls
             full_text = "\n".join([p.extract_text() for p in reader.pages if p.extract_text()])
             col = get_month_key_precise(os.path.basename(f_path)) or get_month_key(os.path.basename(f_path), full_text)
             if col and col != "UNKNOWN":
+                # Extract Table 3.1(a) Outward Taxable Supplies
+                match_31a = re.search(r"3\.1.*?\(a\).*?([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)", full_text, re.DOTALL | re.IGNORECASE)
+                if match_31a:
+                    vals = [clean_value(match_31a.group(i)) for i in range(1, 6)]
+                    for f_name, val in zip(["Taxable Value", "IGST", "CGST", "SGST", "CESS"], vals):
+                        df_g3b.loc[(df_g3b["HEADING"].str.contains("3\.1 \\(a\\)")) & (df_g3b["Details / Field"] == f_name), col] = val
+
+                # Extract Table 4(A)(5) All Other ITC
                 match_3b_itc = re.search(r"4\(A\)\s*\(5\).*?All other ITC.*?([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)", full_text, re.DOTALL | re.IGNORECASE)
                 if match_3b_itc:
                     vals = [clean_value(match_3b_itc.group(i)) for i in range(1, 5)]
@@ -195,7 +218,6 @@ def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xls
         try:
             reader = PdfReader(f_path)
             full_text = "\n".join([p.extract_text() for p in reader.pages if p.extract_text()])
-            # Extract Table 9 Tax Paid details if present
             match_t9 = re.search(r"9\..*?Tax Paid.*?([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)", full_text, re.DOTALL | re.IGNORECASE)
             if match_t9:
                 vals = [clean_value(match_t9.group(i)) for i in range(1, 5)]
