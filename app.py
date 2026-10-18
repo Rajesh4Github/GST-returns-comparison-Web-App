@@ -81,17 +81,6 @@ with tab_download:
     else:
         st.error("Report file not found. Please run the consolidation pipeline first.")
 
-tab_summary = st.tabs(["📊 Summary Dashboard"])[0]
-
-with tab_summary:
-    st.subheader("📊 Consolidated Summary Dashboard")
-    output_file = "GST_Consolidated_Audit_Report.xlsx"
-    if os.path.exists(output_file):
-        xls = pd.ExcelFile(output_file)
-        if "Summary Dashboard" in xls.sheet_names:
-            df_summary = pd.read_excel(xls, sheet_name="Summary Dashboard")
-            st.dataframe(df_summary, use_container_width=True)
-
             # Quick KPIs
             for _, row in df_summary.iterrows():
                 st.metric(label=row["Metric"], value=row["Value"])
