@@ -3,13 +3,7 @@ import os
 import streamlit as st
 import pandas as pd
 from pathlib import Path
-
-from parsers.returns_parser import parse_returns_folder
-from parsers.gstr1_parser import parse_gstr1_folder
-from parsers.gstr2b_parser import parse_gstr2b_pdf
-from reports.excel_generator import generate_audit_excel_report
-from reports.gstr1_excel_generator import generate_gstr1_excel_report
-from reports.gstr9_excel_generator import generate_gstr9_comparison_report
+from pypdf import PdfReader
 
 st.set_page_config(
     page_title="GST Detailed Audit & Analytics Portal",
@@ -18,7 +12,7 @@ st.set_page_config(
 )
 
 st.title("🔍 GST Detailed Audit — Automated Desk Review & Reconciliation Portal")
-st.markdown("Upload all your monthly/annual returns, ledgers, and financials. The system will parse, run audit algorithms, and generate auditor-ready working paper Excel files.")
+st.markdown("Upload your monthly and annual GST return PDFs, run data analytical models, and download auditor-ready Excel workbooks.")
 
 # Sidebar Settings
 st.sidebar.header("⚙️ Audit Parameters")
@@ -27,7 +21,7 @@ audit_year = st.sidebar.selectbox("Audit Year", ["2024-25", "2023-24"])
 commissionerate = st.sidebar.text_input("Commissionerate", value="CGST Commissionerate Thiruvananthapuram")
 
 tab_upload, tab_analytics, tab_downloads = st.tabs([
-    "📁 Comprehensive Document Upload", 
+    "📁 Document Upload Panel", 
     "📊 Audit Algorithms & Analytics", 
     "📥 Download Consolidated Excel Working Papers"
 ])
@@ -38,7 +32,7 @@ workspace_dir.mkdir(exist_ok=True)
 returns_staging.mkdir(exist_ok=True)
 
 with tab_upload:
-    st.subheader("Document Upload Panel (All Returns, Ledgers & Statements)")
+    st.subheader("Document Upload Panel (Returns & Statements)")
     
     col1, col2 = st.columns(2)
     with col1:
@@ -48,51 +42,26 @@ with tab_upload:
         uploaded_gstr2b = st.file_uploader("GSTR-2B Statements (Up to 12 files)", type=["pdf"], accept_multiple_files=True)
         uploaded_gstr9 = st.file_uploader("GSTR-9 Annual Returns", type=["pdf"], accept_multiple_files=True)
 
-    with col2:
-        st.markdown("### 2. Ledgers, Statements & Financials (Excel / CSV)")
-        uploaded_credit = st.file_uploader("Electronic Credit Ledger", type=["xlsx", "xls", "csv"])
-        uploaded_cash = st.file_uploader("Electronic Cash Ledger", type=["xlsx", "xls", "csv"])
-        uploaded_rcm = st.file_uploader("RCM Statement", type=["xlsx", "xls", "csv"])
-        uploaded_fs = st.file_uploader("Financial Statements (P&L / Balance Sheet)", type=["pdf", "xlsx", "xls", "csv"])
-
     def save_uploaded_files(files, prefix):
         if not files:
             return
-        if isinstance(files, list):
-            for file in files:
-                dest = returns_staging / f"{prefix}_{file.name}"
-                with open(dest, "wb") as f:
-                    f.write(file.getbuffer())
-        else:
-            dest = returns_staging / f"{prefix}_{files.name}"
+        for file in files:
+            dest = returns_staging / f"{prefix}_{file.name}"
             with open(dest, "wb") as f:
-                f.write(files.getbuffer())
+                f.write(file.getbuffer())
 
-    if st.button("🚀 Process All Documents & Run Audit Engine", type="primary"):
-        with st.spinner("Extracting tables and running normalization algorithms..."):
+    if st.button("🚀 Process Documents & Initialize Staging", type="primary"):
+        with st.spinner("Saving uploaded files to workspace..."):
             save_uploaded_files(uploaded_3b, "GSTR3B")
             save_uploaded_files(uploaded_gstr1, "GSTR1")
             save_uploaded_files(uploaded_gstr2b, "GSTR2B")
             save_uploaded_files(uploaded_gstr9, "GSTR9")
-            save_uploaded_files(uploaded_credit, "Credit_Ledger")
-            save_uploaded_files(uploaded_cash, "Cash_Ledger")
-            save_uploaded_files(uploaded_rcm, "RCM")
-            save_uploaded_files(uploaded_fs, "Financials")
-            
-            # Generate Consolidated Workbooks
-            generate_audit_excel_report(gstin_input, output_filename=str(workspace_dir / "GSTR3B_Consolidated.xlsx"))
-            generate_gstr1_excel_report(gstin_input, folder_path=str(returns_staging), output_filename=str(workspace_dir / "GSTR1_Consolidated.xlsx"))
-            
-            gstr9_files = list(returns_staging.glob("*GSTR9*.pdf"))
-            if gstr9_files:
-                generate_gstr9_comparison_report(gstr9_files, output_filename=str(workspace_dir / "GSTR9_Comparative.xlsx"))
-                
-            st.success("Extraction and algorithmic processing completed successfully! Switch to the tabs above to view metrics and download Excel workpapers.")
+            st.success("Files successfully staged in app workspace! Ready for audit analytics.")
 
 with tab_analytics:
     st.subheader("📊 Audit Analytics & Data Reconciliation Models")
     
-    st.markdown("### 1. ITC Analytical Reconciliation Model (GSTR-3B vs GSTR-2B / GSTR-9)")
+    st.markdown("### ITC Analytical Reconciliation Model (GSTR-3B vs GSTR-2B / GSTR-9)")
     col_a, col_b = st.columns(2)
     with col_a:
         v_3b_4a5 = st.number_input("GSTR-3B 4A(5) ITC Availed", value=18752270.59)
