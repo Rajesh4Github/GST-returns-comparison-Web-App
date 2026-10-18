@@ -60,7 +60,7 @@ def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xls
     data_dir = "data" if os.path.exists("data") else "."
 
     # ==========================================
-    # 1. PARSE & CONSOLIDATE GSTR-1 PDFs
+    # 1. PARSE & CONSOLIDATE GSTR-1
     # ==========================================
     print("⚙️ Processing GSTR-1 PDFs...")
     g1_layout = [
@@ -87,117 +87,133 @@ def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xls
                     vals = [clean_value(b2b.group(i)) for i in range(1, 6)]
                     for f, val in zip(["Taxable Value", "IGST", "CGST", "SGST", "Cess"], vals):
                         df_g1.loc[(df_g1["Table Section"] == "4A - B2B Regular") & (df_g1["Details / Field"] == f), col] = val
-                b2cs = re.search(r"7\s*-\s*Taxable.*?Total.*?\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)", full_text, re.DOTALL | re.IGNORECASE)
-                if b2cs:
-                    vals = [clean_value(b2cs.group(i)) for i in range(1, 6)]
-                    for f, val in zip(["Net Value", "IGST", "CGST", "SGST", "Cess"], vals):
-                        df_g1.loc[(df_g1["Table Section"] == "7 - B2CS (Others)") & (df_g1["Details / Field"] == f), col] = val
-        except Exception as e:
-            print(f"Error parsing GSTR-1 PDF: {e}")
-            
+        except Exception:
+            pass
     df_g1["FY TOTAL"] = df_g1[MONTHS].sum(axis=1)
     output_sheets["GSTR-1 Summary (12M)"] = df_g1
 
     # ==========================================
     # 2. PARSE & CONSOLIDATE GSTR-2B
     # ==========================================
-    print("⚙️ Processing GSTR-2B files...")
-    g2b_path = os.path.join(data_dir, "GSTR2B_Consolidated_Schedules_SingleSheet.xlsx")
-    if os.path.exists(g2b_path):
-        df_g2b = pd.read_excel(g2b_path)
-    else:
-        # Dynamic PDF parsing or structured fallback for GSTR-2B
-        g2b_layout = [
-            ("3. ITC Available - Part A (All Other ITC - 4(A)(5))", "Integrated Tax (IGST)"),
-            ("3. ITC Available - Part A (All Other ITC - 4(A)(5))", "Central Tax (CGST)"),
-            ("3. ITC Available - Part A (All Other ITC - 4(A)(5))", "State/UT Tax (SGST)"),
-            ("3. ITC Available - Part A (All Other ITC - 4(A)(5))", "Cess"),
-            ("3. ITC Available - Part B (Credit Notes - Others 4(A))", "Integrated Tax (IGST)"),
-            ("3. ITC Available - Part B (Credit Notes - Others 4(A))", "Central Tax (CGST)"),
-            ("3. ITC Available - Part B (Credit Notes - Others 4(A))", "State/UT Tax (SGST)"),
-            ("3. ITC Available - Part B (Credit Notes - Others 4(A))", "Cess"),
-            ("4. ITC Not Available - Part A (All Other ITC - 4(D)(2))", "Integrated Tax (IGST)"),
-            ("4. ITC Not Available - Part A (All Other ITC - 4(D)(2))", "Central Tax (CGST)"),
-            ("4. ITC Not Available - Part A (All Other ITC - 4(D)(2))", "State/UT Tax (SGST)"),
-            ("4. ITC Not Available - Part A (All Other ITC - 4(D)(2))", "Cess"),
-            ("6. ITC Rejected - Part A (IMS Rejected)", "Integrated Tax (IGST)"),
-            ("6. ITC Rejected - Part A (IMS Rejected)", "Central Tax (CGST)"),
-            ("6. ITC Rejected - Part A (IMS Rejected)", "State/UT Tax (SGST)"),
-            ("6. ITC Rejected - Part A (IMS Rejected)", "Cess")
-        ]
-        df_g2b = pd.DataFrame([{"Table Section": h, "Details / Field": f, **{m: 0.0 for m in MONTHS}} for h, f in g2b_layout])
-        
-        # Check if GSTR2B PDFs exist and parse them via pdfplumber
-        for f_path in glob.glob(os.path.join(data_dir, "GSTR2B_*.pdf")) + glob.glob("GSTR2B_*.pdf"):
-            try:
-                with pdfplumber.open(f_path) as pdf:
-                    full_text = "\n".join([page.extract_text() or "" for page in pdf.pages])
-                    col = get_month_key_precise(os.path.basename(f_path)) or get_month_key(os.path.basename(f_path), full_text)
-                    if col and col != "UNKNOWN":
-                        match_igst = re.search(r"4\(A\)\(5\).*?([\d,]+\.\d+)", full_text, re.DOTALL | re.IGNORECASE)
-                        if match_igst:
-                            val = clean_value(match_igst.group(1))
-                            df_g2b.loc[(df_g2b["Table Section"].str.contains("4\\(A\\)\\(5\\)")) & (df_g2b["Details / Field"] == "Integrated Tax (IGST)"), col] = val
-            except Exception:
-                pass
+    print("⚙️ Processing GSTR-2B PDFs...")
+    g2b_layout = [
+        ("3. ITC Available - Part A (All Other ITC - 4(A)(5))", "Integrated Tax (IGST)"),
+        ("3. ITC Available - Part A (All Other ITC - 4(A)(5))", "Central Tax (CGST)"),
+        ("3. ITC Available - Part A (All Other ITC - 4(A)(5))", "State/UT Tax (SGST)"),
+        ("3. ITC Available - Part A (All Other ITC - 4(A)(5))", "Cess"),
+        ("3. ITC Available - Part B (Credit Notes - Others 4(A))", "Integrated Tax (IGST)"),
+        ("3. ITC Available - Part B (Credit Notes - Others 4(A))", "Central Tax (CGST)"),
+        ("3. ITC Available - Part B (Credit Notes - Others 4(A))", "State/UT Tax (SGST)"),
+        ("3. ITC Available - Part B (Credit Notes - Others 4(A))", "Cess"),
+        ("4. ITC Not Available - Part A (All Other ITC - 4(D)(2))", "Integrated Tax (IGST)"),
+        ("4. ITC Not Available - Part A (All Other ITC - 4(D)(2))", "Central Tax (CGST)"),
+        ("4. ITC Not Available - Part A (All Other ITC - 4(D)(2))", "State/UT Tax (SGST)"),
+        ("4. ITC Not Available - Part A (All Other ITC - 4(D)(2))", "Cess"),
+        ("6. ITC Rejected - Part A (IMS Rejected)", "Integrated Tax (IGST)"),
+        ("6. ITC Rejected - Part A (IMS Rejected)", "Central Tax (CGST)"),
+        ("6. ITC Rejected - Part A (IMS Rejected)", "State/UT Tax (SGST)"),
+        ("6. ITC Rejected - Part A (IMS Rejected)", "Cess")
+    ]
+    df_g2b = pd.DataFrame([{"Table Section": h, "Details / Field": f, **{m: 0.0 for m in MONTHS}} for h, f in g2b_layout])
+    
+    for f_path in glob.glob(os.path.join(data_dir, "GSTR2B_*.pdf")) + glob.glob("GSTR2B_*.pdf"):
+        try:
+            reader = PdfReader(f_path)
+            full_text = "\n".join([p.extract_text() for p in reader.pages if p.extract_text()])
+            col = get_month_key_precise(os.path.basename(f_path)) or get_month_key(os.path.basename(f_path), full_text)
+            if col and col != "UNKNOWN":
+                match_itc = re.search(r"3\..*?All Other ITC.*?([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)", full_text, re.DOTALL | re.IGNORECASE)
+                if match_itc:
+                    vals = [clean_value(match_itc.group(i)) for i in range(1, 5)]
+                    for f_name, val in zip(["Integrated Tax (IGST)", "Central Tax (CGST)", "State/UT Tax (SGST)", "Cess"], vals):
+                        df_g2b.loc[(df_g2b["Table Section"].str.contains("4\\(A\\)\\(5\\)")) & (df_g2b["Details / Field"] == f_name), col] = val
+        except Exception:
+            pass
 
-    if "FY TOTAL" not in df_g2b.columns and all(m in df_g2b.columns for m in MONTHS):
-        df_g2b["FY TOTAL"] = df_g2b[MONTHS].sum(axis=1)
+    df_g2b["FY TOTAL"] = df_g2b[MONTHS].sum(axis=1)
     output_sheets["GSTR-2B Summary (12M)"] = df_g2b
 
     # ==========================================
     # 3. PARSE & CONSOLIDATE GSTR-3B
     # ==========================================
-    print("⚙️ Processing GSTR-3B files...")
-    g3b_path = os.path.join(data_dir, "GSTR3B_Consolidated_Schedules_SingleSheet.xlsx")
-    if os.path.exists(g3b_path):
-        df_g3b = pd.read_excel(g3b_path)
-    else:
-        g3b_headings = [
-            ("3.1 (a) Outward taxable supplies (other than zero rated, nil rated and exempted)", ["Taxable Value", "IGST", "CGST", "SGST", "CESS"]),
-            ("3.1 (b) Outward taxable supplies (zero rated)", ["Taxable Value", "IGST", "CESS"]),
-            ("3.1 (c) Other outward supplies (Nil rated, exempted)", ["Value"]),
-            ("3.1 (d) Inward supplies (liable to reverse charge)", ["Taxable Value", "IGST", "CGST", "SGST", "CESS"]),
-            ("3.1 (e) Non-GST outward supplies", ["Value"]),
-            ("4 (A) ITC Available", ["IGST", "CGST", "SGST", "CESS"]),
-            ("4 (B) ITC Reversed", ["IGST", "CGST", "SGST", "CESS"]),
-            ("5.1 Interest and Late fee", ["IGST", "CGST", "SGST", "CESS"]),
-            ("Cash Forward Charge", ["IGST", "CGST", "SGST", "CESS"]),
-            ("Filing Metadata", ["No. of days late"])
-        ]
-        g3b_rows = []
-        for h, fields in g3b_headings:
-            for f in fields:
-                g3b_rows.append({"HEADING": h, "Details / Field": f, **{m: 0.0 for m in MONTHS}})
-        df_g3b = pd.DataFrame(g3b_rows)
+    print("⚙️ Processing GSTR-3B PDFs...")
+    g3b_headings = [
+        ("3.1 (a) Outward taxable supplies (other than zero rated, nil rated and exempted)", ["Taxable Value", "IGST", "CGST", "SGST", "CESS"]),
+        ("3.1 (b) Outward taxable supplies (zero rated)", ["Taxable Value", "IGST", "CESS"]),
+        ("3.1 (c) Other outward supplies (Nil rated, exempted)", ["Value"]),
+        ("3.1 (d) Inward supplies (liable to reverse charge)", ["Taxable Value", "IGST", "CGST", "SGST", "CESS"]),
+        ("3.1 (e) Non-GST outward supplies", ["Value"]),
+        ("4 (A) ITC Available", ["IGST", "CGST", "SGST", "CESS"]),
+        ("4 (B) ITC Reversed", ["IGST", "CGST", "SGST", "CESS"]),
+        ("5.1 Interest and Late fee", ["IGST", "CGST", "SGST", "CESS"]),
+        ("Cash Forward Charge", ["IGST", "CGST", "SGST", "CESS"]),
+        ("Filing Metadata", ["No. of days late"])
+    ]
+    g3b_rows = []
+    for h, fields in g3b_headings:
+        for f in fields:
+            g3b_rows.append({"HEADING": h, "Details / Field": f, **{m: 0.0 for m in MONTHS}})
+    df_g3b = pd.DataFrame(g3b_rows)
 
-    if "FY TOTAL" not in df_g3b.columns and all(m in df_g3b.columns for m in MONTHS):
-        df_g3b["FY TOTAL"] = df_g3b[MONTHS].sum(axis=1)
+    for f_path in glob.glob(os.path.join(data_dir, "GSTR3B_*.pdf")) + glob.glob("GSTR3B_*.pdf"):
+        try:
+            reader = PdfReader(f_path)
+            full_text = "\n".join([p.extract_text() for p in reader.pages if p.extract_text()])
+            col = get_month_key_precise(os.path.basename(f_path)) or get_month_key(os.path.basename(f_path), full_text)
+            if col and col != "UNKNOWN":
+                match_3b_itc = re.search(r"4\(A\)\s*\(5\).*?All other ITC.*?([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)", full_text, re.DOTALL | re.IGNORECASE)
+                if match_3b_itc:
+                    vals = [clean_value(match_3b_itc.group(i)) for i in range(1, 5)]
+                    for f_name, val in zip(["IGST", "CGST", "SGST", "CESS"], vals):
+                        df_g3b.loc[(df_g3b["HEADING"].str.contains("ITC Available")) & (df_g3b["Details / Field"] == f_name), col] = val
+        except Exception:
+            pass
+
+    df_g3b["FY TOTAL"] = df_g3b[MONTHS].sum(axis=1)
     output_sheets["GSTR-3B Summary (12M)"] = df_g3b
 
     # ==========================================
-    # 4. PARSE & CONSOLIDATE GSTR-9
+    # 4. PARSE & CONSOLIDATE GSTR-9 SUMMARY
     # ==========================================
-    print("⚙️ Processing GSTR-9 working papers...")
-    g9_path = os.path.join(data_dir, "GST_Audit_GSTR9_Comparative_Working_Papers.xlsx")
-    if os.path.exists(g9_path):
+    print("⚙️ Processing GSTR-9 Annual Return PDFs...")
+    g9_layout = [
+        ("GSTR-9 Table 4", "Details of advances, inward and outward supplies on which tax is payable"),
+        ("GSTR-9 Table 5", "Details of outward supplies on which tax is not payable"),
+        ("GSTR-9 Table 6", "Details of ITC availed as declared in returns filed during the financial year"),
+        ("GSTR-9 Table 7", "Details of ITC reversed and ineligible ITC as declared in returns filed"),
+        ("GSTR-9 Table 8", "Other ITC related information (ITC as per GSTR-2A/2B vs ITC availed)"),
+        ("GSTR-9 Table 9", "Details of tax paid as declared in returns filed during the financial year"),
+        ("GSTR-9 Table 10, 11, 12 & 13", "Particulars of the transactions for the previous FY declared in returns of April to September of current FY"),
+        ("GSTR-9 Table 14", "Differential tax paid on account of declaration in tables 10 & 11"),
+        ("GSTR-9 Table 15", "Particulars of Demands and Refunds"),
+        ("GSTR-9 Table 16", "Supplies received from composition taxpayers, deemed supply under section 143 and goods sent on job work basis"),
+        ("GSTR-9 Table 17 & 18", "HSN wise summary of outward & inward supplies")
+    ]
+    df_g9 = pd.DataFrame([{"Table / Section": t, "Description / Parameter": d, "Taxable Value / Amount": 0.0, "Central Tax (CGST)": 0.0, "State/UT Tax (SGST)": 0.0, "Integrated Tax (IGST)": 0.0, "Cess": 0.0} for t, d in g9_layout])
+
+    for f_path in glob.glob(os.path.join(data_dir, "GSTR9_*.pdf")) + glob.glob("GSTR9_*.pdf"):
         try:
-            df_g9 = pd.read_excel(g9_path, sheet_name="GSTR9_Comparative_Summary")
-            output_sheets["GSTR-9 Summary (Multi-Year)"] = df_g9
+            reader = PdfReader(f_path)
+            full_text = "\n".join([p.extract_text() for p in reader.pages if p.extract_text()])
+            # Extract Table 9 Tax Paid details if present
+            match_t9 = re.search(r"9\..*?Tax Paid.*?([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)", full_text, re.DOTALL | re.IGNORECASE)
+            if match_t9:
+                vals = [clean_value(match_t9.group(i)) for i in range(1, 5)]
+                for idx, col_name in enumerate(["Central Tax (CGST)", "State/UT Tax (SGST)", "Integrated Tax (IGST)", "Cess"]):
+                    df_g9.loc[df_g9["Table / Section"] == "GSTR-9 Table 9", col_name] = vals[idx]
         except Exception:
             pass
+
+    output_sheets["GSTR-9 Summary (Multi-Year)"] = df_g9
 
     # ==========================================
     # 5. GENERATE THE 10 RECONCILIATION AUDIT SHEETS
     # ==========================================
-    print("⚙️ Formulating 10 Audit Reconciliation Working Papers...")
-    
-    # Sheet 1: ITC Supplier Recon (3B vs 2B)
     rows_s1 = []
     for m in MONTHS:
-        g3b_val = df_g3b.loc[(df_g3b["HEADING"].str.contains("All other ITC|4 \\(A\\)", case=False, na=False)) & (df_g3b["Details / Field"] == "IGST"), m] if not df_g3b.empty else pd.Series([0.0])
+        g3b_val = df_g3b.loc[(df_g3b["HEADING"].str.contains("ITC Available", case=False, na=False)) & (df_g3b["Details / Field"] == "IGST"), m] if not df_g3b.empty else pd.Series([0.0])
         g3b = float(g3b_val.values[0]) if len(g3b_val) > 0 and pd.notna(g3b_val.values[0]) else 0.0
-        g2b_val = df_g2b.loc[(df_g2b["Table Section"].str.contains("4\\(A\\)\\(5\\)", case=False, na=False)) & (df_g2b["Details / Field"].str.contains("IGST", case=False, na=False)), m] if not df_g2b.empty else pd.Series([0.0])
+        g2b_val = df_g2b.loc[(df_g2b["Table Section"].str.contains("4\\(A\\)\\(5\\)", case=False, na=False)) & (df_g2b["Details / Field"] == "Integrated Tax (IGST)"), m] if not df_g2b.empty else pd.Series([0.0])
         g2b = float(g2b_val.values[0]) if len(g2b_val) > 0 and pd.notna(g2b_val.values[0]) else 0.0
         dev = round(max(0.0, g3b - g2b), 2)
         rows_s1.append({
@@ -209,7 +225,6 @@ def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xls
         })
     output_sheets["1. ITC Supplier Recon"] = pd.DataFrame(rows_s1)
 
-    # Sheets 2 to 9: Standard compliance schedules
     output_sheets["2. ITC Reclaim Audit"] = pd.DataFrame([{"Period": m, "Reclaimed ITC (Table 4D1)": 0.0, "Reversals Declared": 0.0, "Deviation": 0.0, "Status": "Clean"} for m in MONTHS])
     output_sheets["3. RCM ITC vs Liability"] = pd.DataFrame([{"Period": m, "RCM ITC Availed (3B 4A3)": 0.0, "RCM Liability (3.1d)": 0.0, "Deviation": 0.0, "Status": "Clean"} for m in MONTHS])
     output_sheets["4. RCM Historical Trail"] = pd.DataFrame([{"Historical RCM Trail": 0.0, "Opening Balance": 0.0, "Deviation": 0.0, "Status": "Clean"}])
@@ -219,7 +234,6 @@ def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xls
     output_sheets["8. Unregistered Remittance"] = pd.DataFrame([{"Period": m, "Unregistered Supplies": 0.0, "Tax Remitted": 0.0, "Deviation": 0.0, "Status": "Clean"} for m in MONTHS])
     output_sheets["9. E-Way Bill vs Liability"] = pd.DataFrame([{"Period": m, "GSTR-3B Tax Liability": 0.0, "E-Way Bill Clearances": 0.0, "Deviation": 0.0, "Status": "Clean"} for m in MONTHS])
 
-    # Sheet 10: Delayed Filing Interest
     delayed_rows = []
     for m in MONTHS:
         try:
@@ -242,13 +256,11 @@ def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xls
     output_sheets["10. Delayed Interest Audit"] = pd.DataFrame(delayed_rows)
 
     # ==========================================
-    # WRITING MASTER CONSOLIDATED WORKBOOK
+    # WRITING WORKBOOK
     # ==========================================
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         for sheet_name, df_data in output_sheets.items():
             if isinstance(df_data, pd.DataFrame) and not df_data.empty:
                 df_data.to_excel(writer, sheet_name=sheet_name, index=False)
-                print(f"📁 Compiled Sheet: '{sheet_name}'")
                 
-    print(f"\n🎉 Master Consolidated Multi-Sheet Audit Report successfully generated at: {output_path}")
     return output_path
