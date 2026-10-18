@@ -59,7 +59,10 @@ def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xls
     output_sheets = {}
     data_dir = "data" if os.path.exists("data") else "."
 
-    # 1. PARSE & CONSOLIDATE GSTR-1
+    # ==========================================
+    # 1. PARSE & CONSOLIDATE GSTR-1 PDFs
+    # ==========================================
+    print("⚙️ Processing GSTR-1 PDFs...")
     g1_layout = [
         ("4A - B2B Regular", "Taxable Value"), ("4A - B2B Regular", "IGST"), ("4A - B2B Regular", "CGST"), ("4A - B2B Regular", "SGST"), ("4A - B2B Regular", "Cess"),
         ("4B - B2B Reverse Charge", "Taxable Value"), ("4B - B2B Reverse Charge", "IGST"), ("4B - B2B Reverse Charge", "CGST"), ("4B - B2B Reverse Charge", "SGST"), ("4B - B2B Reverse Charge", "Cess"),
@@ -84,17 +87,26 @@ def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xls
                     vals = [clean_value(b2b.group(i)) for i in range(1, 6)]
                     for f, val in zip(["Taxable Value", "IGST", "CGST", "SGST", "Cess"], vals):
                         df_g1.loc[(df_g1["Table Section"] == "4A - B2B Regular") & (df_g1["Details / Field"] == f), col] = val
-        except Exception:
-            pass
+                b2cs = re.search(r"7\s*-\s*Taxable.*?Total.*?\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)", full_text, re.DOTALL | re.IGNORECASE)
+                if b2cs:
+                    vals = [clean_value(b2cs.group(i)) for i in range(1, 6)]
+                    for f, val in zip(["Net Value", "IGST", "CGST", "SGST", "Cess"], vals):
+                        df_g1.loc[(df_g1["Table Section"] == "7 - B2CS (Others)") & (df_g1["Details / Field"] == f), col] = val
+        except Exception as e:
+            print(f"Error parsing GSTR-1 PDF: {e}")
+            
     df_g1["FY TOTAL"] = df_g1[MONTHS].sum(axis=1)
     output_sheets["GSTR-1 Summary (12M)"] = df_g1
 
-    # 2. PARSE GSTR-2B SUMMARY (Reads exact pre-consolidated Excel schedule if uploaded)
+    # ==========================================
+    # 2. PARSE & CONSOLIDATE GSTR-2B
+    # ==========================================
+    print("⚙️ Processing GSTR-2B files...")
     g2b_path = os.path.join(data_dir, "GSTR2B_Consolidated_Schedules_SingleSheet.xlsx")
     if os.path.exists(g2b_path):
         df_g2b = pd.read_excel(g2b_path)
     else:
-        # Fallback layout matching 16 rows x 15 columns exactly
+        # Dynamic PDF parsing or structured fallback for GSTR-2B
         g2b_layout = [
             ("3. ITC Available - Part A (All Other ITC - 4(A)(5))", "Integrated Tax (IGST)"),
             ("3. ITC Available - Part A (All Other ITC - 4(A)(5))", "Central Tax (CGST)"),
@@ -114,17 +126,33 @@ def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xls
             ("6. ITC Rejected - Part A (IMS Rejected)", "Cess")
         ]
         df_g2b = pd.DataFrame([{"Table Section": h, "Details / Field": f, **{m: 0.0 for m in MONTHS}} for h, f in g2b_layout])
-    
+        
+        # Check if GSTR2B PDFs exist and parse them via pdfplumber
+        for f_path in glob.glob(os.path.join(data_dir, "GSTR2B_*.pdf")) + glob.glob("GSTR2B_*.pdf"):
+            try:
+                with pdfplumber.open(f_path) as pdf:
+                    full_text = "\n".join([page.extract_text() or "" for page in pdf.pages])
+                    col = get_month_key_precise(os.path.basename(f_path)) or get_month_key(os.path.basename(f_path), full_text)
+                    if col and col != "UNKNOWN":
+                        match_igst = re.search(r"4\(A\)\(5\).*?([\d,]+\.\d+)", full_text, re.DOTALL | re.IGNORECASE)
+                        if match_igst:
+                            val = clean_value(match_igst.group(1))
+                            df_g2b.loc[(df_g2b["Table Section"].str.contains("4\\(A\\)\\(5\\)")) & (df_g2b["Details / Field"] == "Integrated Tax (IGST)"), col] = val
+            except Exception:
+                pass
+
     if "FY TOTAL" not in df_g2b.columns and all(m in df_g2b.columns for m in MONTHS):
         df_g2b["FY TOTAL"] = df_g2b[MONTHS].sum(axis=1)
     output_sheets["GSTR-2B Summary (12M)"] = df_g2b
 
-    # 3. PARSE GSTR-3B SUMMARY (Reads exact pre-consolidated Excel schedule if uploaded)
+    # ==========================================
+    # 3. PARSE & CONSOLIDATE GSTR-3B
+    # ==========================================
+    print("⚙️ Processing GSTR-3B files...")
     g3b_path = os.path.join(data_dir, "GSTR3B_Consolidated_Schedules_SingleSheet.xlsx")
     if os.path.exists(g3b_path):
         df_g3b = pd.read_excel(g3b_path)
     else:
-        # Fallback layout matching 78 rows x 15 columns exactly
         g3b_headings = [
             ("3.1 (a) Outward taxable supplies (other than zero rated, nil rated and exempted)", ["Taxable Value", "IGST", "CGST", "SGST", "CESS"]),
             ("3.1 (b) Outward taxable supplies (zero rated)", ["Taxable Value", "IGST", "CESS"]),
@@ -147,7 +175,10 @@ def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xls
         df_g3b["FY TOTAL"] = df_g3b[MONTHS].sum(axis=1)
     output_sheets["GSTR-3B Summary (12M)"] = df_g3b
 
-    # 4. GSTR-9 Summary (Multi-Year)
+    # ==========================================
+    # 4. PARSE & CONSOLIDATE GSTR-9
+    # ==========================================
+    print("⚙️ Processing GSTR-9 working papers...")
     g9_path = os.path.join(data_dir, "GST_Audit_GSTR9_Comparative_Working_Papers.xlsx")
     if os.path.exists(g9_path):
         try:
@@ -157,8 +188,11 @@ def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xls
             pass
 
     # ==========================================
-    # GENERATE ALL 10 RECONCILIATION AUDIT SHEETS
+    # 5. GENERATE THE 10 RECONCILIATION AUDIT SHEETS
     # ==========================================
+    print("⚙️ Formulating 10 Audit Reconciliation Working Papers...")
+    
+    # Sheet 1: ITC Supplier Recon (3B vs 2B)
     rows_s1 = []
     for m in MONTHS:
         g3b_val = df_g3b.loc[(df_g3b["HEADING"].str.contains("All other ITC|4 \\(A\\)", case=False, na=False)) & (df_g3b["Details / Field"] == "IGST"), m] if not df_g3b.empty else pd.Series([0.0])
@@ -175,6 +209,7 @@ def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xls
         })
     output_sheets["1. ITC Supplier Recon"] = pd.DataFrame(rows_s1)
 
+    # Sheets 2 to 9: Standard compliance schedules
     output_sheets["2. ITC Reclaim Audit"] = pd.DataFrame([{"Period": m, "Reclaimed ITC (Table 4D1)": 0.0, "Reversals Declared": 0.0, "Deviation": 0.0, "Status": "Clean"} for m in MONTHS])
     output_sheets["3. RCM ITC vs Liability"] = pd.DataFrame([{"Period": m, "RCM ITC Availed (3B 4A3)": 0.0, "RCM Liability (3.1d)": 0.0, "Deviation": 0.0, "Status": "Clean"} for m in MONTHS])
     output_sheets["4. RCM Historical Trail"] = pd.DataFrame([{"Historical RCM Trail": 0.0, "Opening Balance": 0.0, "Deviation": 0.0, "Status": "Clean"}])
@@ -184,6 +219,7 @@ def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xls
     output_sheets["8. Unregistered Remittance"] = pd.DataFrame([{"Period": m, "Unregistered Supplies": 0.0, "Tax Remitted": 0.0, "Deviation": 0.0, "Status": "Clean"} for m in MONTHS])
     output_sheets["9. E-Way Bill vs Liability"] = pd.DataFrame([{"Period": m, "GSTR-3B Tax Liability": 0.0, "E-Way Bill Clearances": 0.0, "Deviation": 0.0, "Status": "Clean"} for m in MONTHS])
 
+    # Sheet 10: Delayed Filing Interest
     delayed_rows = []
     for m in MONTHS:
         try:
@@ -205,10 +241,14 @@ def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xls
         })
     output_sheets["10. Delayed Interest Audit"] = pd.DataFrame(delayed_rows)
 
-    # WRITING COMPLETE WORKBOOK
+    # ==========================================
+    # WRITING MASTER CONSOLIDATED WORKBOOK
+    # ==========================================
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         for sheet_name, df_data in output_sheets.items():
             if isinstance(df_data, pd.DataFrame) and not df_data.empty:
                 df_data.to_excel(writer, sheet_name=sheet_name, index=False)
+                print(f"📁 Compiled Sheet: '{sheet_name}'")
                 
+    print(f"\n🎉 Master Consolidated Multi-Sheet Audit Report successfully generated at: {output_path}")
     return output_path
