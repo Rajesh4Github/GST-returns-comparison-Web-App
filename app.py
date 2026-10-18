@@ -81,7 +81,5 @@ with tab_download:
     else:
         st.error("Report file not found. Please run the consolidation pipeline first.")
 
-            # Quick KPIs
-            for _, row in df_summary.iterrows():
-                st.metric(label=row["Metric"], value=row["Value"])
+       
 
