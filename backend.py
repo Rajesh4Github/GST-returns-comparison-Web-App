@@ -143,7 +143,9 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
         cgst_val = df_g3b.loc[(df_g3b["HEADING"].str.contains("Cash Forward Charge", case=False, na=False)) & (df_g3b["Details / Field"] == "CGST"), m] if not df_g3b.empty and "HEADING" in df_g3b.columns else []
         sgst_val = df_g3b.loc[(df_g3b["HEADING"].str.contains("Cash Forward Charge", case=False, na=False)) & (df_g3b["Details / Field"] == "SGST"), m] if not df_g3b.empty and "HEADING" in df_g3b.columns else []
         cash_tax = (float(cgst_val.values[0]) if len(cgst_val) > 0 else 0.0) + (float(sgst_val.values[0]) if len(sgst_val) > 0 else 0.0)
+        
         calc_interest = round(cash_tax * 0.18 * (days_late / 365.0), 2) if days_late > 0 else 0.0
+        
         interest_rows.append({
             "Period": m, "Days Delayed": days_late, "Net Cash Tax Paid": cash_tax,
             "Interest Payable (18%)": calc_interest, "Status": "Action Needed" if calc_interest > 0 else "Satisfactory"
