@@ -161,3 +161,5 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
 
     print(f"\n🎉 SUCCESS! Unified Consolidated Audit workbook created at: {output_path}")
     return output_path
+# Alias for compatibility with app.py
+execute_unified_consolidation = execute_final_consolidation
