@@ -30,21 +30,10 @@ def parse_pdf_tables(file):
     return pd.concat(records) if records else pd.DataFrame()
 
 # --- Enhanced Parsers ---
-def parse_gstr1_pdf(file):
-    # Capture all sections: B2B, B2CL, Exports, SEZ, Deemed Exports, B2CS, Nil Rated, Total Liability
-    return parse_pdf_tables(file)
-
-def parse_gstr2b_pdf(file):
-    # Capture Part A (All Other ITC), Part B (Credit Notes), Not Available, Rejected
-    return parse_pdf_tables(file)
-
-def parse_gstr3b_pdf(file):
-    # Capture Outward supplies, ITC Available (4A1–4A5), ITC Reversed, Net ITC, Interest/Late Fee, Filing Metadata
-    return parse_pdf_tables(file)
-
-def parse_gstr9_pdf(file):
-    # Capture Table 4, 6A, 7I
-    return parse_pdf_tables(file)
+def parse_gstr1_pdf(file): return parse_pdf_tables(file)
+def parse_gstr2b_pdf(file): return parse_pdf_tables(file)
+def parse_gstr3b_pdf(file): return parse_pdf_tables(file)
+def parse_gstr9_pdf(file): return parse_pdf_tables(file)
 
 # --- Consolidation & Audit ---
 def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"):
@@ -73,7 +62,7 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
     # --- 10 Audit Schedules ---
     # 1. ITC Supplier Recon
     recon_rows = []
-    if not df_g3b.empty and not df_g2b.empty:
+    if not df_g3b.empty and "Details / Field" in df_g3b.columns and not df_g2b.empty and "Details / Field" in df_g2b.columns:
         for m in df_g3b.columns:
             if m in ["Source File"]: continue
             g3b_val = df_g3b.loc[df_g3b["Details / Field"].str.contains("All other ITC", case=False, na=False), m].sum()
@@ -87,26 +76,28 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
 
     # 2. ITC Reclaim Audit
     reclaim_rows = []
-    for m in df_g3b.columns:
-        if m in ["Source File"]: continue
-        reclaimed = df_g3b.loc[df_g3b["Details / Field"].str.contains("Reclaimed", case=False, na=False), m].sum()
-        reversals = df_g3b.loc[df_g3b["Details / Field"].str.contains("Reversal", case=False, na=False), m].sum()
-        reclaim_rows.append({"Period": m, "Reclaimed ITC": reclaimed,
-                             "Reversals Declared": reversals,
-                             "Deviation": reclaimed - reversals,
-                             "Status": "Clean" if abs(reclaimed - reversals) < 100 else "Mismatch"})
+    if not df_g3b.empty and "Details / Field" in df_g3b.columns:
+        for m in df_g3b.columns:
+            if m in ["Source File"]: continue
+            reclaimed = df_g3b.loc[df_g3b["Details / Field"].str.contains("Reclaimed", case=False, na=False), m].sum()
+            reversals = df_g3b.loc[df_g3b["Details / Field"].str.contains("Reversal", case=False, na=False), m].sum()
+            reclaim_rows.append({"Period": m, "Reclaimed ITC": reclaimed,
+                                 "Reversals Declared": reversals,
+                                 "Deviation": reclaimed - reversals,
+                                 "Status": "Clean" if abs(reclaimed - reversals) < 100 else "Mismatch"})
     output_sheets["2. ITC Reclaim Audit"] = pd.DataFrame(reclaim_rows)
 
     # 3. RCM ITC vs Liability
     rcm_rows = []
-    for m in df_g3b.columns:
-        if m in ["Source File"]: continue
-        itc_rcm = df_g3b.loc[df_g3b["Details / Field"].str.contains("RCM", case=False, na=False), m].sum()
-        liability_rcm = df_g3b.loc[df_g3b["HEADING"].str.contains("Inward supplies", case=False, na=False), m].sum()
-        rcm_rows.append({"Period": m, "RCM ITC Availed": itc_rcm,
-                         "RCM Liability": liability_rcm,
-                         "Deviation": itc_rcm - liability_rcm,
-                         "Status": "Matched" if abs(itc_rcm - liability_rcm) < 100 else "Mismatch"})
+    if not df_g3b.empty and "Details / Field" in df_g3b.columns and "HEADING" in df_g3b.columns:
+        for m in df_g3b.columns:
+            if m in ["Source File"]: continue
+            itc_rcm = df_g3b.loc[df_g3b["Details / Field"].str.contains("RCM", case=False, na=False), m].sum()
+            liability_rcm = df_g3b.loc[df_g3b["HEADING"].str.contains("Inward supplies", case=False, na=False), m].sum()
+            rcm_rows.append({"Period": m, "RCM ITC Availed": itc_rcm,
+                             "RCM Liability": liability_rcm,
+                             "Deviation": itc_rcm - liability_rcm,
+                             "Status": "Matched" if abs(itc_rcm - liability_rcm) < 100 else "Mismatch"})
     output_sheets["3. RCM ITC vs Liability"] = pd.DataFrame(rcm_rows)
 
     # 4. RCM Historical Trail
@@ -119,14 +110,15 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
 
     # 5. Negative ITC Discharge
     neg_rows = []
-    for m in df_g3b.columns:
-        if m in ["Source File"]: continue
-        neg_itc = df_g3b.loc[df_g3b["Details / Field"].str.contains("Negative", case=False, na=False), m].sum()
-        cash_discharge = df_g3b.loc[df_g3b["Details / Field"].str.contains("Cash", case=False, na=False), m].sum()
-        neg_rows.append({"Period": m, "Negative ITC": neg_itc,
-                         "ECL Cash Discharge": cash_discharge,
-                         "Deviation": neg_itc - cash_discharge,
-                         "Status": "Clean" if neg_itc == 0 else "Action Needed"})
+    if not df_g3b.empty and "Details / Field" in df_g3b.columns:
+        for m in df_g3b.columns:
+            if m in ["Source File"]: continue
+            neg_itc = df_g3b.loc[df_g3b["Details / Field"].str.contains("Negative", case=False, na=False), m].sum()
+            cash_discharge = df_g3b.loc[df_g3b["Details / Field"].str.contains("Cash", case=False, na=False), m].sum()
+            neg_rows.append({"Period": m, "Negative ITC": neg_itc,
+                             "ECL Cash Discharge": cash_discharge,
+                             "Deviation": neg_itc - cash_discharge,
+                             "Status": "Clean" if neg_itc == 0 else "Action Needed"})
     output_sheets["5. Negative ITC Discharge"] = pd.DataFrame(neg_rows)
 
     # 6. Annual Liability Discharge
@@ -142,7 +134,7 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
                                 "Status": "Satisfactory" if abs(tax_payable - tax_paid) < 100 else "Mismatch"})
     output_sheets["6. Annual Liability Discharge"] = pd.DataFrame(annual_rows)
 
-        # 7. B2C Credit Notes Audit
+    # 7. B2C Credit Notes Audit
     b2c_rows = []
     if not df_g1.empty and "Table Section" in df_g1.columns:
         for m in df_g1.columns:
@@ -211,7 +203,7 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
 
     # --- Summary Dashboard ---
     summary = {}
-    if not df_g3b.empty and not df_g2b.empty:
+    if not df_g3b.empty and "Details / Field" in df_g3b.columns and not df_g2b.empty and "Details / Field" in df_g2b.columns:
         total_itc_availed = df_g3b.loc[df_g3b["Details / Field"].str.contains("All other ITC", case=False, na=False)].sum(numeric_only=True).sum()
         total_itc_available = df_g2b.loc[df_g2b["Details / Field"].str.contains("Integrated Tax", case=False, na=False)].sum(numeric_only=True).sum()
         summary["Total ITC Availed (3B)"] = total_itc_availed
@@ -219,13 +211,14 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
         summary["Deviation"] = total_itc_availed - total_itc_available
 
     if not df_g9.empty:
-        tax_payable = df_g9["Table 4 - B2B Supplies"].sum()
-        tax_paid = df_g9["Table 6A - Total ITC Availed"].sum() - df_g9["Table 7I - Total ITC Reversed"].sum()
+        tax_payable = df_g9["Table 4 - B2B Supplies"].sum() if "Table 4 - B2B Supplies" in df_g9.columns else 0
+        tax_paid = (df_g9["Table 6A - Total ITC Availed"].sum() if "Table 6A - Total ITC Availed" in df_g9.columns else 0) - \
+                   (df_g9["Table 7I - Total ITC Reversed"].sum() if "Table 7I - Total ITC Reversed" in df_g9.columns else 0)
         summary["Annual Tax Payable (GSTR-9)"] = tax_payable
         summary["Annual Tax Paid (Cash+ITC)"] = tax_paid
         summary["Annual Deviation"] = tax_payable - tax_paid
 
-    if "1. ITC Supplier Recon" in output_sheets:
+    if "1. ITC Supplier Recon" in output_sheets and not output_sheets["1. ITC Supplier Recon"].empty:
         risk_months = len(output_sheets["1. ITC Supplier Recon"].loc[
             output_sheets["1. ITC Supplier Recon"]["Risk Status"] == "Excess Availment Risk"
         ])
@@ -237,7 +230,7 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
     print("\n📁 Saving unified sheets to Excel...")
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         for sheet_name, df_data in output_sheets.items():
-            if isinstance(df_data, pd.DataFrame) and not df_data.empty:
+            if isinstance(df_data, pd.DataFrame):
                 df_data.to_excel(writer, sheet_name=sheet_name, index=False)
                 print(f"   -> Included Sheet: '{sheet_name}'")
 
@@ -246,4 +239,3 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
 
 # Alias for Streamlit app
 execute_unified_consolidation = execute_final_consolidation
-
