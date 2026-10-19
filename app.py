@@ -1,5 +1,5 @@
+# app.py
 import streamlit as st
-import os
 from backend import execute_final_consolidation
 
 st.title("GST Returns Consolidation & Audit")
@@ -18,7 +18,7 @@ if uploaded_files:
     st.success(f"Uploaded {len(uploaded_files)} files successfully!")
 
 if st.button("Run Consolidation"):
-    output_file = execute_final_consolidation(output_path="./GST_Consolidated_Audit_Report.xlsx")
+    output_file = execute_final_consolidation()
     st.success(f"Report generated: {output_file}")
     st.download_button(
         label="Download Consolidated Report",
