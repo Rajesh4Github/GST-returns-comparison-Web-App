@@ -57,7 +57,7 @@ with tab_analytics:
     if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
         xls = pd.ExcelFile(output_file)
     else:st.error("Output file is missing or empty.")
-        selected_schedule = st.selectbox("Select Audit Schedule to Inspect:", xls.sheet_names)
+        #selected_schedule = st.selectbox("Select Audit Schedule to Inspect:", xls.sheet_names)
         
         if selected_schedule:
             df_display = pd.read_excel(xls, sheet_name=selected_schedule)
