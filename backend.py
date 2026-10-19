@@ -31,14 +31,14 @@ def get_month_key(filename):
         return months_map.get(m_num, None)
     return None
 
-def execute_final_consolidation(output_path="/content/GST_Consolidated_Audit_Report.xlsx"):
+def execute_final_consolidation(output_path="./GST_Consolidated_Audit_Report.xlsx"):
     MONTHS = ["APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC","JAN","FEB","MAR"]
     output_sheets = {}
 
     # --- Load pre‑compiled GSTR summaries if available ---
-    g1_path = "/content/GSTR1_Consolidated_Schedules_SingleSheet.xlsx"
-    g2b_path = "/content/GSTR2B_Consolidated_Schedules_SingleSheet.xlsx"
-    g3b_path = "/content/GSTR3B_Consolidated_Schedules_SingleSheet.xlsx"
+    g1_path = "./GSTR1_Consolidated_Schedules_SingleSheet.xlsx"
+    g2b_path = "./GSTR2B_Consolidated_Schedules_SingleSheet.xlsx"
+    g3b_path = "./GSTR3B_Consolidated_Schedules_SingleSheet.xlsx"
 
     output_sheets["GSTR-1 Summary (12M)"] = pd.read_excel(g1_path) if os.path.exists(g1_path) else pd.DataFrame(columns=["Table Section","Details / Field"]+MONTHS)
     output_sheets["GSTR-2B Summary (12M)"] = pd.read_excel(g2b_path) if os.path.exists(g2b_path) else pd.DataFrame(columns=["Table Section","Details / Field"]+MONTHS)
@@ -46,7 +46,7 @@ def execute_final_consolidation(output_path="/content/GST_Consolidated_Audit_Rep
 
     # --- Parse GSTR‑9 PDFs ---
     g9_records = []
-    for file in glob.glob("/content/GSTR9_*.pdf"):
+    for file in glob.glob("./GSTR9_*.pdf"):
         fy = "2023-24" if "032024" in file else "2024-25"
         data = {"Financial Year": fy, "Table 4 - B2B Supplies": 0.0, "Table 6A - Total ITC Availed": 0.0, "Table 7I - Total ITC Reversed": 0.0}
         try:
@@ -112,5 +112,3 @@ def main():
     if st.button("Run Consolidation"):
         output_file = execute_final_consolidation()
         st.success(f"Report generated: {output_file}")
-
-
