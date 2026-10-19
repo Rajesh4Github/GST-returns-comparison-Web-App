@@ -106,3 +106,11 @@ def execute_final_consolidation(output_path="/content/GST_Consolidated_Audit_Rep
     print(f"\n🎉 SUCCESS! Unified Consolidated Audit workbook created at: {output_path}")
     return output_path
 
+from backend import execute_final_consolidation
+
+def main():
+    if st.button("Run Consolidation"):
+        output_file = execute_final_consolidation()
+        st.success(f"Report generated: {output_file}")
+
+
