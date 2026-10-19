@@ -3,9 +3,8 @@ import re
 import glob
 import pdfplumber
 import pandas as pd
-import numpy as np
-import openpyxl
 from pypdf import PdfReader
+
 # =========================================================
 # 1. HELPER UTILITIES
 # =========================================================
@@ -70,7 +69,7 @@ def map_pdf_tables_to_layout(pdf_path, df, month_col):
 
                     for idx, df_row in df.iterrows():
                         heading = str(df_row.get("HEADING", df_row.get("Table Section",""))).lower()
-                        if heading.split()[0] in row_label or heading in row_label:
+                        if heading in row_label or heading.split()[0] in row_label:
                             if cell_vals:
                                 df.at[idx, month_col] = cell_vals[0]
     return df
@@ -78,22 +77,6 @@ def map_pdf_tables_to_layout(pdf_path, df, month_col):
 # =========================================================
 # 3. CONSOLIDATION PIPELINE
 # =========================================================
-def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"):
-    MONTHS = ["APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC","JAN","FEB","MAR"]
-    output_sheets = {}
-    data_dir = "data" if os.path.exists("data") else "."
-
-    # ... your GSTR-1, GSTR-2B, GSTR-3B, GSTR-9 parsing blocks here ...
-    # (use map_pdf_tables_to_layout inside each loop)
-
-    with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
-        for sheet_name, df_data in output_sheets.items():
-            if isinstance(df_data, pd.DataFrame) and not df_data.empty:
-                df_data.to_excel(writer, sheet_name=sheet_name, index=False)
-
-    print(f"✅ Master report created at: {output_path}")
-    return output_path
-
 def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"):
     MONTHS = ["APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC","JAN","FEB","MAR"]
     output_sheets = {}
@@ -141,7 +124,7 @@ def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xls
         ("6. ITC Rejected - Part A (IMS Rejected)","Cess")
     ]
     df_g2b = pd.DataFrame([{"Table Section":h,"Details / Field":f,**{m:0.0 for m in MONTHS}} for h,f in gstr2b_layout])
-    for f_path in glob.glob(os.path.join(data_dir,"*GSTR2B*.pdf")):
+        for f_path in glob.glob(os.path.join(data_dir,"*GSTR2B*.pdf")):
         reader=PdfReader(f_path)
         full_text="\n".join([p.extract_text() for p in reader.pages if p.extract_text()])
         col=get_month_key(os.path.basename(f_path),full_text)
@@ -162,18 +145,9 @@ def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xls
         ("4 (C) Net ITC Available","IGST"),("4 (C) Net ITC Available","CGST"),("4 (C) Net ITC Available","SGST"),("4 (C) Net ITC Available","CESS"),
         ("4 (D) Ineligible ITC","IGST"),("4 (D) Ineligible ITC","CGST"),("4 (D) Ineligible ITC","SGST"),("4 (D) Ineligible ITC","CESS"),
         ("5.1 Interest and Late fee","IGST"),("5.1 Interest and Late fee","CGST"),("5.1 Interest and Late fee","SGST"),("5.1 Interest and Late fee","CESS"),
-                ("6.1 Payment of Tax - Using ITC","IGST"),
-        ("6.1 Payment of Tax - Using ITC","CGST"),
-        ("6.1 Payment of Tax - Using ITC","SGST"),
-        ("6.1 Payment of Tax - Using ITC","CESS"),
-        ("6.1 Payment of Tax - Cash Forward Charge","IGST"),
-        ("6.1 Payment of Tax - Cash Forward Charge","CGST"),
-        ("6.1 Payment of Tax - Cash Forward Charge","SGST"),
-        ("6.1 Payment of Tax - Cash Forward Charge","CESS"),
-        ("6.1 Payment of Tax - Cash Reverse Charge","IGST"),
-        ("6.1 Payment of Tax - Cash Reverse Charge","CGST"),
-        ("6.1 Payment of Tax - Cash Reverse Charge","SGST"),
-        ("6.1 Payment of Tax - Cash Reverse Charge","CESS")
+        ("6.1 Payment of Tax - Using ITC","IGST"),("6.1 Payment of Tax - Using ITC","CGST"),("6.1 Payment of Tax - Using ITC","SGST"),("6.1 Payment of Tax - Using ITC","CESS"),
+        ("6.1 Payment of Tax - Cash Forward Charge","IGST"),("6.1 Payment of Tax - Cash Forward Charge","CGST"),("6.1 Payment of Tax - Cash Forward Charge","SGST"),("6.1 Payment of Tax - Cash Forward Charge","CESS"),
+        ("6.1 Payment of Tax - Cash Reverse Charge","IGST"),("6.1 Payment of Tax - Cash Reverse Charge","CGST"),("6.1 Payment of Tax - Cash Reverse Charge","SGST"),("6.1 Payment of Tax - Cash Reverse Charge","CESS")
     ]
     df_g3b = pd.DataFrame([{"HEADING":h,"Details / Field":f,**{m:0.0 for m in MONTHS}} for h,f in gstr3b_layout])
     for f_path in glob.glob(os.path.join(data_dir,"*GSTR3B*.pdf")):
@@ -195,7 +169,6 @@ def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xls
     for f_path in glob.glob(os.path.join(data_dir,"*GSTR9*.pdf")):
         reader=PdfReader(f_path)
         full_text="\n".join([p.extract_text() for p in reader.pages if p.extract_text()])
-        # For GSTR-9 we can still use the generalized parser
         df_g9=map_pdf_tables_to_layout(f_path,df_g9,"Value")
     output_sheets["GSTR-9 Summary (Multi-Year)"]=df_g9
 
