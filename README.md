@@ -40,3 +40,9 @@ pandas → DataFrame manipulation and reconciliation
 openpyxl → Export consolidated outputs into Excel
 
 regex (re) → Clean and parse numeric values
+
+## How to Run Locally
+1. Clone this repository.
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
