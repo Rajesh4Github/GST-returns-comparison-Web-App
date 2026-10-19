@@ -1,4 +1,5 @@
 # app.py
+import os
 import streamlit as st
 from backend import execute_final_consolidation
 
