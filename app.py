@@ -54,8 +54,9 @@ with tab_analytics:
         execute_unified_consolidation(output_path=output_file)
         st.session_state["report_ready"] = True
 
-    if os.path.exists(output_file):
+    if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
         xls = pd.ExcelFile(output_file)
+    else:st.error("Output file is missing or empty.")
         selected_schedule = st.selectbox("Select Audit Schedule to Inspect:", xls.sheet_names)
         
         if selected_schedule:
