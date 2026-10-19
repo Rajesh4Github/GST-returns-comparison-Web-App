@@ -11,6 +11,11 @@ def parse_gstr1_pdfs():
     """Parse GSTR-1 PDFs into a 12-month DataFrame."""
     layout = [
         ("4A - B2B Regular", ["Taxable Value","IGST","CGST","SGST","Cess"]),
+        ("4B - B2B Reverse Charge", ["Taxable Value","IGST","CGST","SGST","Cess"]),
+        ("5 - B2CL (Large)", ["Taxable Value","IGST","Cess"]),
+        ("6A - Exports", ["Value","IGST","Cess"]),
+        ("6B - SEZ Supplies", ["Value","IGST","CGST","SGST","Cess"]),
+        ("6C - Deemed Exports", ["Value","IGST","CGST","SGST","Cess"]),
         ("7 - B2CS (Others)", ["Net Value","IGST","CGST","SGST","Cess"]),
     ]
     df = pd.DataFrame([{"Table Section": sec, "Details / Field": f, **{m:0.0 for m in MONTHS}} 
@@ -21,9 +26,9 @@ def parse_gstr1_pdfs():
                 full_text = "\n".join([p.extract_text() or "" for p in pdf.pages])
             col = get_month_key(os.path.basename(f_path), full_text)
             if col and col != "UNKNOWN":
-                # Match B2B Regular totals
+                # Regex for B2B Regular
                 match_b2b = re.search(
-                    r"4A.*B2B Regular.*?Total.*?Invoice\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)",
+                    r"B2B Regular.*?Total.*?Invoice\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)",
                     full_text, re.DOTALL
                 )
                 if match_b2b:
@@ -33,7 +38,18 @@ def parse_gstr1_pdfs():
                     df.loc[(df["Table Section"]=="4A - B2B Regular") & (df["Details / Field"]=="CGST"), col] = cgst
                     df.loc[(df["Table Section"]=="4A - B2B Regular") & (df["Details / Field"]=="SGST"), col] = sgst
                     df.loc[(df["Table Section"]=="4A - B2B Regular") & (df["Details / Field"]=="Cess"), col] = cess
-                # Add similar regex for B2CS if needed
+                # Regex for B2CS (Others)
+                match_b2cs = re.search(
+                    r"B2CS.*?Total.*?Invoice\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)",
+                    full_text, re.DOTALL
+                )
+                if match_b2cs:
+                    netval, igst, cgst, sgst, cess = [clean_value(match_b2cs.group(i)) for i in range(1,6)]
+                    df.loc[(df["Table Section"]=="7 - B2CS (Others)") & (df["Details / Field"]=="Net Value"), col] = netval
+                    df.loc[(df["Table Section"]=="7 - B2CS (Others)") & (df["Details / Field"]=="IGST"), col] = igst
+                    df.loc[(df["Table Section"]=="7 - B2CS (Others)") & (df["Details / Field"]=="CGST"), col] = cgst
+                    df.loc[(df["Table Section"]=="7 - B2CS (Others)") & (df["Details / Field"]=="SGST"), col] = sgst
+                    df.loc[(df["Table Section"]=="7 - B2CS (Others)") & (df["Details / Field"]=="Cess"), col] = cess
         except Exception as e:
             print("Error parsing GSTR-1:", e)
     df["FY TOTAL"] = df[MONTHS].sum(axis=1)
@@ -72,7 +88,7 @@ def parse_gstr2b_pdfs():
 def parse_gstr3b_pdfs():
     """Parse GSTR-3B PDFs into a 12-month DataFrame."""
     layout = [
-        ("3.1 Tax Liability", ["Taxable Value","IGST","CGST","SGST","Cess"]),
+        ("3.1 (a) Outward taxable supplies", ["Taxable Value","IGST","CGST","SGST","CESS"]),
         ("4A ITC Availed", ["IGST","CGST","SGST","Cess"]),
         ("Late Filing", ["No. of days late"])
     ]
@@ -85,16 +101,16 @@ def parse_gstr3b_pdfs():
             col = get_month_key(os.path.basename(f_path), full_text)
             if col and col != "UNKNOWN":
                 match_liab = re.search(
-                    r"Outward taxable supplies.*?([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)",
+                    r"Outward taxable supplies.*?\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)",
                     full_text
                 )
                 if match_liab:
                     taxable, igst, cgst, sgst, cess = [clean_value(match_liab.group(i)) for i in range(1,6)]
-                    df.loc[(df["HEADING"]=="3.1 Tax Liability") & (df["Details / Field"]=="Taxable Value"), col] = taxable
-                    df.loc[(df["HEADING"]=="3.1 Tax Liability") & (df["Details / Field"]=="IGST"), col] = igst
-                    df.loc[(df["HEADING"]=="3.1 Tax Liability") & (df["Details / Field"]=="CGST"), col] = cgst
-                    df.loc[(df["HEADING"]=="3.1 Tax Liability") & (df["Details / Field"]=="SGST"), col] = sgst
-                    df.loc[(df["HEADING"]=="3.1 Tax Liability") & (df["Details / Field"]=="Cess"), col] = cess
+                    df.loc[(df["HEADING"]=="3.1 (a) Outward taxable supplies") & (df["Details / Field"]=="Taxable Value"), col] = taxable
+                    df.loc[(df["HEADING"]=="3.1 (a) Outward taxable supplies") & (df["Details / Field"]=="IGST"), col] = igst
+                    df.loc[(df["HEADING"]=="3.1 (a) Outward taxable supplies") & (df["Details / Field"]=="CGST"), col] = cgst
+                    df.loc[(df["HEADING"]=="3.1 (a) Outward taxable supplies") & (df["Details / Field"]=="SGST"), col] = sgst
+                    df.loc[(df["HEADING"]=="3.1 (a) Outward taxable supplies") & (df["Details / Field"]=="CESS"), col] = cess
                 match_late = re.search(r"No\. of days late.*?(\d+)", full_text)
                 if match_late:
                     df.loc[(df["Details / Field"]=="No. of days late"), col] = clean_value(match_late.group(1))
@@ -104,26 +120,56 @@ def parse_gstr3b_pdfs():
 
 
 def parse_gstr9_pdfs():
-    """Parse GSTR-9 PDFs into a multi-year DataFrame."""
+    """Parse filed GSTR-9 PDFs into a multi-year DataFrame."""
     records = []
     for f_path in glob.glob("GSTR9_*.pdf"):
-        fy = "2023-24" if "032024" in f_path else "2024-25"
-        data = {"Financial Year": fy, "Table 4 - B2B Supplies":0.0, "Table 6A - Total ITC Availed":0.0, "Table 7I - Total ITC Reversed":0.0}
+        fy = "2023-24" if "2023" in f_path else "2024-25"
+        data = {
+            "Financial Year": fy,
+            "Table 4 - B2B Supplies": 0.0,
+            "Table 6A - Total ITC Availed": 0.0,
+            "Table 7I - Total ITC Reversed": 0.0
+        }
         try:
             with pdfplumber.open(f_path) as pdf:
                 full_text = "\n".join([p.extract_text() or "" for p in pdf.pages])
+
+                # Skip system-computed GSTR-9 (no legal validity)
+                if "System Computed GSTR-9" in full_text:
+                    print(f"Skipping system-computed GSTR-9: {f_path}")
+                    continue
+
+                # Match B2B supplies line
                 match_b2b = re.search(
-                    r"B Supplies made to registered persons.*?([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)",
+                    r"Supplies made to registered persons.*?\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)",
                     full_text
                 )
                 if match_b2b:
                     taxable, cgst, sgst, igst, cess = [clean_value(match_b2b.group(i)) for i in range(1,6)]
                     data["Table 4 - B2B Supplies"] = taxable
-                    data["Table 6A - Total ITC Availed"] = igst  # adjust mapping if needed
-                    data["Table 7I - Total ITC Reversed"] = cgst + sgst
+
+                # Match ITC Availed (Table 6A)
+                match_itc = re.search(
+                    r"Total amount of input tax credit availed.*?\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)",
+                    full_text
+                )
+                if match_itc:
+                    igst, cgst, sgst, cess = [clean_value(match_itc.group(i)) for i in range(1,5)]
+                    data["Table 6A - Total ITC Availed"] = igst + cgst + sgst
+
+                # Match ITC Reversed (Table 7I)
+                match_rev = re.search(
+                    r"Total ITC Reversed.*?\s+([\d,]+\.\d+)",
+                    full_text
+                )
+                if match_rev:
+                    data["Table 7I - Total ITC Reversed"] = clean_value(match_rev.group(1))
+
         except Exception as e:
             print("Error parsing GSTR-9:", e)
+
         records.append(data)
+
     return pd.DataFrame(records)
 
 # ---------------- Consolidation Pipeline ----------------
