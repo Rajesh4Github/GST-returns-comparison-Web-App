@@ -6,7 +6,9 @@ import pandas as pd
 import numpy as np
 import openpyxl
 from pypdf import PdfReader
-
+# =========================================================
+# 1. HELPER UTILITIES
+# =========================================================
 def clean_value(val):
     if val is None:
         return 0.0
@@ -48,7 +50,50 @@ def get_month_key(filename, pdf_text=""):
         if k in text_lower:
             return v
     return None
-    
+
+# =========================================================
+# 2. GENERALIZED ROW-MAPPING FUNCTION
+# =========================================================
+def map_pdf_tables_to_layout(pdf_path, df, month_col):
+    """Parse all tables in a PDF and map rows dynamically to the predefined DataFrame layout."""
+    with pdfplumber.open(pdf_path) as pdf:
+        for page in pdf.pages:
+            tables = page.extract_tables()
+            for table in tables:
+                if not table:
+                    continue
+                for row in table:
+                    if not row or not any(row):
+                        continue
+                    row_label = str(row[0]).replace("\n"," ").strip().lower()
+                    cell_vals = [clean_value(c) for c in row[1:] if c is not None]
+
+                    for idx, df_row in df.iterrows():
+                        heading = str(df_row.get("HEADING", df_row.get("Table Section",""))).lower()
+                        if heading.split()[0] in row_label or heading in row_label:
+                            if cell_vals:
+                                df.at[idx, month_col] = cell_vals[0]
+    return df
+
+# =========================================================
+# 3. CONSOLIDATION PIPELINE
+# =========================================================
+def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"):
+    MONTHS = ["APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC","JAN","FEB","MAR"]
+    output_sheets = {}
+    data_dir = "data" if os.path.exists("data") else "."
+
+    # ... your GSTR-1, GSTR-2B, GSTR-3B, GSTR-9 parsing blocks here ...
+    # (use map_pdf_tables_to_layout inside each loop)
+
+    with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+        for sheet_name, df_data in output_sheets.items():
+            if isinstance(df_data, pd.DataFrame) and not df_data.empty:
+                df_data.to_excel(writer, sheet_name=sheet_name, index=False)
+
+    print(f"✅ Master report created at: {output_path}")
+    return output_path
+
 def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"):
     MONTHS = ["APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC","JAN","FEB","MAR"]
     output_sheets = {}
