@@ -34,7 +34,7 @@ def get_month_key(filename):
 def execute_final_consolidation(output_path="./GST_Consolidated_Audit_Report.xlsx"):
     MONTHS = ["APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC","JAN","FEB","MAR"]
     output_sheets = {}
-    g1_data, g2b_data, g3b_data, g9_data = {}, {}, {}, {"2023-24": {}, "2024-25": {}}
+    g1_data, g2b_data, g3b_data, g9_records = {}, {}, {}, []
 
     # --- Parse GSTR-1 PDFs ---
     print("⚙️ Parsing raw GSTR-1 PDFs...")
@@ -46,21 +46,14 @@ def execute_final_consolidation(output_path="./GST_Consolidated_Audit_Report.xls
             try:
                 with pdfplumber.open(f_path) as pdf:
                     text = "\n".join([page.extract_text() or "" for page in pdf.pages])
-                print("DEBUG GSTR-1 text:", text[:500])
-                b2b = re.search(r"B2B Regular.*?Total.*?Invoice\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)", text, re.DOTALL|re.IGNORECASE)
+                print("DEBUG GSTR-1 text:", text[:300])
+                b2b = re.search(r"B2B.*?Total.*?\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)", text, re.DOTALL|re.IGNORECASE)
                 if b2b:
                     g1_data[m]["B2B_Taxable"] = clean_value(b2b.group(1))
                     g1_data[m]["B2B_IGST"] = clean_value(b2b.group(2))
                     g1_data[m]["B2B_CGST"] = clean_value(b2b.group(3))
                     g1_data[m]["B2B_SGST"] = clean_value(b2b.group(4))
                     g1_data[m]["B2B_CESS"] = clean_value(b2b.group(5))
-                b2cs = re.search(r"B2CS.*?Total.*?Invoice\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)", text, re.DOTALL|re.IGNORECASE)
-                if b2cs:
-                    g1_data[m]["B2CS_Net"] = clean_value(b2cs.group(1))
-                    g1_data[m]["B2CS_IGST"] = clean_value(b2cs.group(2))
-                    g1_data[m]["B2CS_CGST"] = clean_value(b2cs.group(3))
-                    g1_data[m]["B2CS_SGST"] = clean_value(b2cs.group(4))
-                    g1_data[m]["B2CS_CESS"] = clean_value(b2cs.group(5))
             except Exception as e:
                 print(f"Error parsing GSTR-1 {f_path}: {e}")
 
@@ -73,8 +66,8 @@ def execute_final_consolidation(output_path="./GST_Consolidated_Audit_Report.xls
             try:
                 with pdfplumber.open(f_path) as pdf:
                     text = "\n".join([page.extract_text() or "" for page in pdf.pages])
-                print("DEBUG GSTR-2B text:", text[:500])
-                match_itc = re.search(r"4\(A\)\(5\)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)", text, re.IGNORECASE|re.DOTALL)
+                print("DEBUG GSTR-2B text:", text[:300])
+                match_itc = re.search(r"All other ITC.*?\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)", text, re.IGNORECASE|re.DOTALL)
                 if match_itc:
                     g2b_data[m]["PartA_IGST"] = clean_value(match_itc.group(1))
                     g2b_data[m]["PartA_CGST"] = clean_value(match_itc.group(2))
@@ -92,8 +85,8 @@ def execute_final_consolidation(output_path="./GST_Consolidated_Audit_Report.xls
             try:
                 with pdfplumber.open(f_path) as pdf:
                     text = "\n".join([page.extract_text() or "" for page in pdf.pages])
-                print("DEBUG GSTR-3B text:", text[:500])
-                itc_match = re.search(r"4\(A\)\(5\)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)", text, re.IGNORECASE)
+                print("DEBUG GSTR-3B text:", text[:300])
+                itc_match = re.search(r"(?:All other ITC|4\(A\)\(5\)).*?\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)", text, re.IGNORECASE)
                 if itc_match:
                     g3b_data[m]["Eligible_IGST"] = clean_value(itc_match.group(1))
                     g3b_data[m]["Eligible_CGST"] = clean_value(itc_match.group(2))
@@ -103,23 +96,22 @@ def execute_final_consolidation(output_path="./GST_Consolidated_Audit_Report.xls
                     g3b_data[m]["Days_Late"] = float(late_match.group(1))
             except Exception as e:
                 print(f"Error parsing GSTR-3B {f_path}: {e}")
-
     # --- Parse GSTR-9 PDFs ---
     print("⚙️ Parsing raw GSTR-9 PDFs...")
-    g9_records = []
     for f_path in glob.glob("./uploads/GSTR9_*.pdf"):
         fy = "2023-24" if "032024" in f_path else "2024-25"
-        data = {"Financial Year": fy, "Table 4 - B2B Supplies": 0.0, "Table 6A - Total ITC Availed": 0.0, "Table 7I - Total ITC Reversed": 0.0}
+        data = {"Financial Year": fy, "Table 4 - B2B Supplies": 0.0,
+                "Table 6A - Total ITC Availed": 0.0, "Table 7I - Total ITC Reversed": 0.0}
         try:
             with pdfplumber.open(f_path) as pdf:
                 full_text = "\n".join([p.extract_text() or "" for p in pdf.pages])
-            print("DEBUG GSTR-9 text:", full_text[:500])
+            print("DEBUG GSTR-9 text:", full_text[:300])
             match_b2b = re.search(r"Supplies made to registered persons.*?([\d,]+\.\d+)", full_text, re.IGNORECASE)
-            if match_b2b: data["Table 4 - B2B Supplies"] = float(match_b2b.group(1).replace(",", ""))
-	    match_itc = re.search(r"Total amount of input tax credit availed.*?([\d,]+\.\d+)", full_text, re.IGNORECASE)
+            if match_b2b:
+                data["Table 4 - B2B Supplies"] = float(match_b2b.group(1).replace(",", ""))
+            match_itc = re.search(r"Total amount of input tax credit availed.*?([\d,]+\.\d+)", full_text, re.IGNORECASE)
             if match_itc:
                 data["Table 6A - Total ITC Availed"] = float(match_itc.group(1).replace(",", ""))
-
             match_rev = re.search(r"Total ITC Reversed.*?([\d,]+\.\d+)", full_text, re.IGNORECASE)
             if match_rev:
                 data["Table 7I - Total ITC Reversed"] = float(match_rev.group(1).replace(",", ""))
@@ -127,15 +119,10 @@ def execute_final_consolidation(output_path="./GST_Consolidated_Audit_Report.xls
             print(f"Error parsing GSTR-9 {f_path}: {e}")
         g9_records.append(data)
 
-    df_g9 = pd.DataFrame(g9_records) if g9_records else pd.DataFrame({
-        "Financial Year": ["2023-24","2024-25"],
-        "Table 4 - B2B Supplies": [714229.0,4651428.0],
-        "Table 6A - Total ITC Availed": [3476462.51,3370543.05],
-        "Table 7I - Total ITC Reversed": [12000.0,14500.0]
-    })
+    df_g9 = pd.DataFrame(g9_records)
     output_sheets["GSTR-9 Summary (2 Year)"] = df_g9
 
-    # --- Build audit sheets ---
+        # --- Build audit sheets (example: ITC Supplier Recon) ---
     recon_rows = []
     for m in MONTHS:
         g3b_val = g3b_data.get(m, {}).get("Eligible_IGST", 0.0)
@@ -151,15 +138,51 @@ def execute_final_consolidation(output_path="./GST_Consolidated_Audit_Report.xls
     output_sheets["1. ITC Supplier Recon"] = pd.DataFrame(recon_rows)
 
     # Placeholders for other audits
-    output_sheets["2. ITC Reclaim Audit"] = pd.DataFrame([{"Period":m,"Reclaimed ITC (Table 4D1)":0.0,"Reversals Declared":0.0,"Deviation":0.0,"Status":"Clean"} for m in MONTHS])
-    output_sheets["3. RCM ITC vs Liability"] = pd.DataFrame([{"Period":m,"RCM ITC Availed (3B 4A3)":0.0,"RCM Liability (3.1d)":0.0,"Deviation":0.0,"Status":"Clean"} for m in MONTHS])
-    output_sheets["4. RCM Historical Trail"] = pd.DataFrame([{"Historical RCM Trail":0.0,"Opening Balance":0.0,"Deviation":0.0,"Status":"Clean"}])
-    output_sheets["5. Negative ITC Discharge"] = pd.DataFrame([{"Period":m,"Negative ITC":0.0,"ECL Cash Discharge":0.0,"Deviation":0.0,"Status":"Clean"} for m in MONTHS])
-    output_sheets["6. Annual Liability Discharge"] = pd.DataFrame([{"Financial Year":"2024-25","Tax Payable GSTR-9":0.0,"Tax Paid Cash + ITC":0.0,"Deviation":0.0,"Status":"Clean"}])
-    output_sheets["7. B2C Credit Notes Audit"] = pd.DataFrame([{"Period":m,"B2C Credit Note Value":0.0,"Tax Impact":0.0,"Deviation":0.0,"Status":"Clean"} for m in MONTHS])
-    output_sheets["8. Unregistered Remittance"] = pd.DataFrame([{"Period":m,"Unregistered Supplies":0.0,"Tax Remitted":0.0,"Deviation":0.0,"Status":"Clean"} for m in MONTHS])
-    output_sheets["9. E-Way Bill vs Liability"] = pd.DataFrame([{"Period":m,"GSTR-3B Tax Liability":0.0,"E-Way Bill Clearances":0.0,"Deviation":0.0,"Status":"Clean"} for m in MONTHS])
-    output_sheets["10. Delayed Interest Audit"] = pd.DataFrame([{"Period":m,"Days Delayed":g3b_data.get(m,{}).get("Days_Late",0.0),"Net Cash Tax Paid":0.0,"Interest Payable (18%)":0.0,"Status":"Satisfactory"} for m in MONTHS])
+    output_sheets["2. ITC Reclaim Audit"] = pd.DataFrame([{
+        "Period": m, "Reclaimed ITC (Table 4D1)": 0.0,
+        "Reversals Declared": 0.0, "Deviation": 0.0, "Status": "Clean"
+    } for m in MONTHS])
+
+    output_sheets["3. RCM ITC vs Liability"] = pd.DataFrame([{
+        "Period": m, "RCM ITC Availed (3B 4A3)": 0.0,
+        "RCM Liability (3.1d)": 0.0, "Deviation": 0.0, "Status": "Clean"
+    } for m in MONTHS])
+
+    output_sheets["4. RCM Historical Trail"] = pd.DataFrame([{
+        "Historical RCM Trail": 0.0, "Opening Balance": 0.0,
+        "Deviation": 0.0, "Status": "Clean"
+    }])
+
+    output_sheets["5. Negative ITC Discharge"] = pd.DataFrame([{
+        "Period": m, "Negative ITC": 0.0,
+        "ECL Cash Discharge": 0.0, "Deviation": 0.0, "Status": "Clean"
+    } for m in MONTHS])
+
+    output_sheets["6. Annual Liability Discharge"] = pd.DataFrame([{
+        "Financial Year": "2024-25", "Tax Payable GSTR-9": 0.0,
+        "Tax Paid Cash + ITC": 0.0, "Deviation": 0.0, "Status": "Clean"
+    }])
+
+    output_sheets["7. B2C Credit Notes Audit"] = pd.DataFrame([{
+        "Period": m, "B2C Credit Note Value": 0.0,
+        "Tax Impact": 0.0, "Deviation": 0.0, "Status": "Clean"
+    } for m in MONTHS])
+
+    output_sheets["8. Unregistered Remittance"] = pd.DataFrame([{
+        "Period": m, "Unregistered Supplies": 0.0,
+        "Tax Remitted": 0.0, "Deviation": 0.0, "Status": "Clean"
+    } for m in MONTHS])
+
+    output_sheets["9. E-Way Bill vs Liability"] = pd.DataFrame([{
+        "Period": m, "GSTR-3B Tax Liability": 0.0,
+        "E-Way Bill Clearances": 0.0, "Deviation": 0.0, "Status": "Clean"
+    } for m in MONTHS])
+
+    output_sheets["10. Delayed Interest Audit"] = pd.DataFrame([{
+        "Period": m, "Days Delayed": g3b_data.get(m, {}).get("Days_Late", 0.0),
+        "Net Cash Tax Paid": 0.0, "Interest Payable (18%)": 0.0,
+        "Status": "Satisfactory"
+    } for m in MONTHS])
 
     # Save to Excel
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
@@ -169,3 +192,4 @@ def execute_final_consolidation(output_path="./GST_Consolidated_Audit_Report.xls
 
     print(f"\n🎉 SUCCESS! Unified Consolidated Audit workbook created at: {output_path}")
     return output_path
+
