@@ -19,6 +19,7 @@ tab_upload, tab_analytics, tab_download = st.tabs([
     "📥 Download Auditor-Ready Excel Working Papers"
 ])
 
+# ---------------- Upload Tab ----------------
 with tab_upload:
     st.subheader("Upload Monthly & Annual GST Returns")
     uploaded_files = st.file_uploader(
@@ -46,6 +47,7 @@ with tab_upload:
             except Exception as e:
                 st.error(f"Error during consolidation: {e}")
 
+# ---------------- Analytics Tab ----------------
 with tab_analytics:
     st.subheader("🔍 Audit & Compliance Reconciliation Schedules")
     
@@ -55,30 +57,35 @@ with tab_analytics:
         st.session_state["report_ready"] = True
 
     if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
-        xls = pd.ExcelFile(output_file)
-    else:st.error("Output file is missing or empty.")
-        #selected_schedule = st.selectbox("Select Audit Schedule to Inspect:", xls.sheet_names)
-        
-        if selected_schedule:
-            df_display = pd.read_excel(xls, sheet_name=selected_schedule)
-            st.markdown(f"### Schedule View: `{selected_schedule}`")
-            
-            # Render Altair chart safely if it's the Supplier Recon schedule
-            if selected_schedule == "1. ITC Supplier Recon" and not df_display.empty:
-                try:
-                    df_display["Deviation"] = pd.to_numeric(df_display["Deviation"], errors="coerce").fillna(0.0)
-                    chart = alt.Chart(df_display).mark_bar().encode(
-                        x=alt.X("Period:N", sort=None),
-                        y=alt.Y("Deviation:Q", title="Excess Availment Deviation"),
-                        color="RiskStatus:N" if "Risk Status" in df_display.columns else alt.value("steelblue"),
-                        tooltip=["Period", "Deviation"]
-                    ).properties(title="Excess ITC Availment vs 2B")
-                    st.altair_chart(chart, use_container_width=True)
-                except Exception:
-                    pass
+        try:
+            xls = pd.ExcelFile(output_file)
+            selected_schedule = st.selectbox("Select Audit Schedule to Inspect:", xls.sheet_names)
 
-            st.dataframe(df_display, use_container_width=True)
+            if selected_schedule:
+                df_display = pd.read_excel(xls, sheet_name=selected_schedule)
+                st.markdown(f"### Schedule View: `{selected_schedule}`")
 
+                # Render Altair chart safely if it's the Supplier Recon schedule
+                if selected_schedule == "1. ITC Supplier Recon" and not df_display.empty:
+                    try:
+                        df_display["Deviation"] = pd.to_numeric(df_display["Deviation"], errors="coerce").fillna(0.0)
+                        chart = alt.Chart(df_display).mark_bar().encode(
+                            x=alt.X("Period:N", sort=None),
+                            y=alt.Y("Deviation:Q", title="Excess Availment Deviation"),
+                            color="Risk Status:N" if "Risk Status" in df_display.columns else alt.value("steelblue"),
+                            tooltip=["Period", "Deviation"]
+                        ).properties(title="Excess ITC Availment vs 2B")
+                        st.altair_chart(chart, use_container_width=True)
+                    except Exception:
+                        pass
+
+                st.dataframe(df_display, use_container_width=True)
+        except Exception as e:
+            st.error(f"Error reading Excel file: {e}")
+    else:
+        st.error("Output file is missing or empty.")
+
+# ---------------- Download Tab ----------------
 with tab_download:
     st.subheader("📥 Download Auditor-Ready Excel Working Papers")
     output_file = "GST_Consolidated_Audit_Report.xlsx"
@@ -86,7 +93,7 @@ with tab_download:
     if not os.path.exists(output_file):
         execute_unified_consolidation(output_path=output_file)
         
-    if os.path.exists(output_file):
+    if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
         with open(output_file, "rb") as f:
             st.download_button(
                 label="⬇️ Download Complete Multi-Sheet Audit Report (.xlsx)",
@@ -96,4 +103,4 @@ with tab_download:
                 type="primary"
             )
     else:
-        st.error("Report file not found. Please run the consolidation pipeline first.")
+        st.error("Report file not found or empty. Please run the consolidation pipeline first.")
