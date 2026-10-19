@@ -9,7 +9,8 @@ from backend_utils import clean_val, get_month_key_from_filename
 
 MONTHS = ["APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC", "JAN", "FEB", "MAR"]
 
-def build_perfect_consolidated_report(output_path='GST_Consolidated_Audit_Report.xlsx'):
+#def build_perfect_consolidated_report(output_path='GST_Consolidated_Audit_Report.xlsx'):
+def execute_unified_consolidation(output_path='GST_Consolidated_Audit_Report.xlsx'):
     g1_data = {}
     g2b_data = {}
     g3b_data = {}
@@ -264,4 +265,9 @@ def build_perfect_consolidated_report(output_path='GST_Consolidated_Audit_Report
     print(f"\n🎉 SUCCESS! Unified Consolidated Audit workbook created at: {output_path}")
 
 if __name__ == "__main__":
-    build_perfect_consolidated_report()
+    execute_unified_consolidation()
+    
+#     print(f"\n🎉 SUCCESS! Unified Consolidated Audit workbook created at: {output_path}")
+
+# if __name__ == "__main__":
+#     build_perfect_consolidated_report()
