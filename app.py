@@ -1,106 +1,19 @@
-import os
 import streamlit as st
-import pandas as pd
-import altair as alt
-from backend import execute_unified_consolidation
+from backend import execute_final_consolidation
 
-st.set_page_config(
-    page_title="GST Returns Comparison & Audit App",
-    page_icon="📊",
-    layout="wide"
-)
+st.title("GST Returns Consolidation & Audit")
 
-st.title("📊 GST Returns Comparison & Multi-Sheet Audit App")
-st.markdown("Upload your monthly and annual GST return PDFs or schedules, run all reconciliation models, and download auditor-ready Excel workbooks.")
+st.write("Generate a unified GST Consolidated Audit Report from uploaded returns.")
 
-tab_upload, tab_analytics, tab_download = st.tabs([
-    "📁 Document Upload Panel", 
-    "📊 Audit Algorithms & Analytics", 
-    "📥 Download Auditor-Ready Excel Working Papers"
-])
-
-# ---------------- Upload Tab ----------------
-with tab_upload:
-    st.subheader("Upload Monthly & Annual GST Returns")
-    uploaded_files = st.file_uploader(
-        "Upload GSTR PDFs, GSTR-2B/3B Excel files, or GSTR-9 working papers", 
-        type=["pdf", "xlsx"], 
-        accept_multiple_files=True
-    )
-
-    if uploaded_files:
-        os.makedirs("data", exist_ok=True)
-        for uploaded_file in uploaded_files:
-            file_path = os.path.join("data", uploaded_file.name)
-            with open(file_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
-        st.success(f"Successfully uploaded {len(uploaded_files)} file(s)!")
-
-    if st.button("🚀 Execute Master Audit Consolidation", type="primary"):
-        output_file = "GST_Consolidated_Audit_Report.xlsx"
-        with st.spinner("Processing files, building consolidated schedules, and running audit algorithms..."):
-            try:
-                report_path = execute_unified_consolidation(output_path=output_file)
-                st.session_state["report_ready"] = True
-                st.session_state["output_file"] = report_path
-                st.success("Consolidation and audit analysis complete!")
-            except Exception as e:
-                st.error(f"Error during consolidation: {e}")
-
-# ---------------- Analytics Tab ----------------
-with tab_analytics:
-    st.subheader("🔍 Audit & Compliance Reconciliation Schedules")
-    
-    output_file = "GST_Consolidated_Audit_Report.xlsx"
-    if not os.path.exists(output_file):
-        execute_unified_consolidation(output_path=output_file)
-        st.session_state["report_ready"] = True
-
-    if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
-        try:
-            xls = pd.ExcelFile(output_file)
-            selected_schedule = st.selectbox("Select Audit Schedule to Inspect:", xls.sheet_names)
-
-            if selected_schedule:
-                df_display = pd.read_excel(xls, sheet_name=selected_schedule)
-                st.markdown(f"### Schedule View: `{selected_schedule}`")
-
-                # Render Altair chart safely if it's the Supplier Recon schedule
-                if selected_schedule == "1. ITC Supplier Recon" and not df_display.empty:
-                    try:
-                        df_display["Deviation"] = pd.to_numeric(df_display["Deviation"], errors="coerce").fillna(0.0)
-                        chart = alt.Chart(df_display).mark_bar().encode(
-                            x=alt.X("Period:N", sort=None),
-                            y=alt.Y("Deviation:Q", title="Excess Availment Deviation"),
-                            color="Risk Status:N" if "Risk Status" in df_display.columns else alt.value("steelblue"),
-                            tooltip=["Period", "Deviation"]
-                        ).properties(title="Excess ITC Availment vs 2B")
-                        st.altair_chart(chart, use_container_width=True)
-                    except Exception:
-                        pass
-
-                st.dataframe(df_display, use_container_width=True)
-        except Exception as e:
-            st.error(f"Error reading Excel file: {e}")
-    else:
-        st.error("Output file is missing or empty.")
-
-# ---------------- Download Tab ----------------
-with tab_download:
-    st.subheader("📥 Download Auditor-Ready Excel Working Papers")
-    output_file = "GST_Consolidated_Audit_Report.xlsx"
-    
-    if not os.path.exists(output_file):
-        execute_unified_consolidation(output_path=output_file)
-        
-    if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
-        with open(output_file, "rb") as f:
-            st.download_button(
-                label="⬇️ Download Complete Multi-Sheet Audit Report (.xlsx)",
-                data=f,
-                file_name="GST_Consolidated_Audit_Report.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                type="primary"
-            )
-    else:
-        st.error("Report file not found or empty. Please run the consolidation pipeline first.")
+if st.button("Run Consolidation"):
+    try:
+        output_file = execute_final_consolidation()
+        st.success(f"✅ Report generated successfully at: {output_file}")
+        st.download_button(
+            label="Download Consolidated Report",
+            data=open(output_file, "rb").read(),
+            file_name="GST_Consolidated_Audit_Report.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        st.error(f"❌ Error during consolidation: {e}")
