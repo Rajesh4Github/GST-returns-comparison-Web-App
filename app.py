@@ -3,7 +3,18 @@ from backend import execute_final_consolidation
 
 st.title("GST Returns Consolidation & Audit")
 
-st.write("Generate a unified GST Consolidated Audit Report from uploaded returns.")
+uploaded_files = st.file_uploader(
+    "Upload your GSTR returns (PDF/Excel)", 
+    type=["pdf","xlsx"], 
+    accept_multiple_files=True
+)
+
+if uploaded_files:
+    # Save uploaded files locally
+    for f in uploaded_files:
+        with open(f.name, "wb") as out:
+            out.write(f.read())
+    st.success(f"Uploaded {len(uploaded_files)} files successfully!")
 
 if st.button("Run Consolidation"):
     try:
