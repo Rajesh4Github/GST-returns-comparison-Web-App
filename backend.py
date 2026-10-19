@@ -116,7 +116,7 @@ def execute_final_consolidation(output_path="./GST_Consolidated_Audit_Report.xls
             print("DEBUG GSTR-9 text:", full_text[:500])
             match_b2b = re.search(r"Supplies made to registered persons.*?([\d,]+\.\d+)", full_text, re.IGNORECASE)
             if match_b2b: data["Table 4 - B2B Supplies"] = float(match_b2b.group(1).replace(",", ""))
-                        match_itc = re.search(r"Total amount of input tax credit availed.*?([\d,]+\.\d+)", full_text, re.IGNORECASE)
+	    match_itc = re.search(r"Total amount of input tax credit availed.*?([\d,]+\.\d+)", full_text, re.IGNORECASE)
             if match_itc:
                 data["Table 6A - Total ITC Availed"] = float(match_itc.group(1).replace(",", ""))
 
