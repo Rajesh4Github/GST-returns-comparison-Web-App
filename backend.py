@@ -1,66 +1,27 @@
 import os, re, glob
 import pandas as pd
 import pdfplumber
+from backend_utils import clean_value, get_month_key
 
-# =========================================
-# COMMON UTILITY FUNCTIONS
-# =========================================
-def clean_value(val):
-    if val is None:
-        return 0.0
-    val_str = str(val).replace(",", "").replace(" ", "").replace("\n", "").strip()
-    val_str = re.sub(r"^[a-zA-Z\s/]+(?!\d)", "", val_str)
-    val_str = re.sub(r"^[a-zA-Z]+", "", val_str)
-    if val_str in ["", "-", ".", "0.00"]:
-        return 0.0
-    match = re.search(r"[-+]?\d*\.\d+|[-+]?\d+", val_str)
-    if match:
-        try:
-            return float(match.group())
-        except ValueError:
-            return 0.0
-    return 0.0
-
-def get_month_key(filename):
-    match = re.search(r"_(\d{2})\d{4}", filename)
-    if match:
-        m_num = match.group(1)
-        months_map = {
-            "04": "APR","05": "MAY","06": "JUN","07": "JUL",
-            "08": "AUG","09": "SEP","10": "OCT","11": "NOV",
-            "12": "DEC","01": "JAN","02": "FEB","03": "MAR"
-        }
-        return months_map.get(m_num, None)
-    return None
-
-# =========================================
-# UNIFIED CONSOLIDATION PIPELINE
-# =========================================
 def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"):
-    ...
-    with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
-        for sheet_name, df_data in output_sheets.items():
-            df_data.to_excel(writer, sheet_name=sheet_name, index=False)
-            print(f"Included Sheet: {sheet_name}")
-    print(f"✅ SUCCESS! Unified Consolidated Audit workbook created at: {output_path}")
-    return output_path
-
+    MONTHS = ["APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC","JAN","FEB","MAR"]
+    output_sheets = {}
 
     # --- GSTR-1 ---
-    g1_path = "/GSTR1_Consolidated_Schedules_SingleSheet.xlsx"
+    g1_path = "GSTR1_Consolidated_Schedules_SingleSheet.xlsx"
     output_sheets["GSTR-1 Summary (12M)"] = pd.read_excel(g1_path) if os.path.exists(g1_path) else pd.DataFrame(columns=["Table Section","Details / Field"]+MONTHS)
 
     # --- GSTR-2B ---
-    g2b_path = "/GSTR2B_Consolidated_Schedules_SingleSheet.xlsx"
+    g2b_path = "GSTR2B_Consolidated_Schedules_SingleSheet.xlsx"
     output_sheets["GSTR-2B Summary (12M)"] = pd.read_excel(g2b_path) if os.path.exists(g2b_path) else pd.DataFrame(columns=["Table Section","Details / Field"]+MONTHS)
 
     # --- GSTR-3B ---
-    g3b_path = "/GSTR3B_Consolidated_Schedules_SingleSheet.xlsx"
+    g3b_path = "GSTR3B_Consolidated_Schedules_SingleSheet.xlsx"
     output_sheets["GSTR-3B Summary (12M)"] = pd.read_excel(g3b_path) if os.path.exists(g3b_path) else pd.DataFrame(columns=["HEADING","Details / Field"]+MONTHS)
 
     # --- GSTR-9 ---
     g9_records=[]
-    for file in glob.glob("/GSTR9_*.pdf"):
+    for file in glob.glob("GSTR9_*.pdf"):
         fy="2023-24" if "032024" in file else "2024-25"
         data={"Financial Year":fy,"Table 4 - B2B Supplies":0.0,"Table 6A - Total ITC Availed":0.0,"Table 7I - Total ITC Reversed":0.0}
         try:
@@ -89,46 +50,11 @@ def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xls
     })
     output_sheets["GSTR-9 Summary (2 Year)"]=df_g9
 
-    # --- Reconciliation Sheets ---
-    df_g3b=output_sheets["GSTR-3B Summary (12M)"]
-    df_g2b=output_sheets["GSTR-2B Summary (12M)"]
-
-    recon_rows=[]
-    for m in MONTHS:
-        g3b_val=df_g3b.loc[(df_g3b["HEADING"].str.contains("All other ITC",case=False,na=False)) & (df_g3b["Details / Field"]=="IGST"),m] if not df_g3b.empty else []
-        g3b=float(g3b_val.values[0]) if len(g3b_val)>0 else 0.0
-        g2b_val=df_g2b.loc[(df_g2b["Table Section"].str.contains("4\\(A\\)\\(5\\)",case=False,na=False)) & (df_g2b["Details / Field"].str.contains("IGST",case=False,na=False)),m] if not df_g2b.empty else []
-        g2b=float(g2b_val.values[0]) if len(g2b_val)>0 else 0.0
-        dev=round(max(0.0,g3b-g2b),2)
-        recon_rows.append({"Period":m,"GSTR-3B ITC Availed":g3b,"GSTR-2B ITC Available":g2b,"Deviation":dev,"Risk Status":"Excess Availment Risk" if dev>100 else "Satisfactory"})
-    output_sheets["1. ITC Supplier Recon"]=pd.DataFrame(recon_rows)
-
-    # Placeholders for 2–9
-    for i,name in enumerate(["2. ITC Reclaim Audit","3. RCM ITC vs Liability","4. RCM Historical Trail","5. Negative ITC Discharge","6. Annual Liability Discharge","7. B2C Credit Notes Audit","8. Unregistered Remittance","9. E-Way Bill vs Liability"],start=2):
-        output_sheets[name]=pd.DataFrame()
-
-    # 10. Delayed Interest Audit
-    interest_rows=[]
-    for m in MONTHS:
-        days_late_val=df_g3b.loc[df_g3b["Details / Field"]=="No. of days late",m] if not df_g3b.empty else []
-        days_late=float(days_late_val.values[0]) if len(days_late_val)>0 else 0.0
-        cgst_val=df_g3b.loc[(df_g3b["HEADING"].str.contains("Cash Forward Charge",case=False,na=False)) & (df_g3b["Details / Field"]=="CGST"),m] if not df_g3b.empty else []
-        sgst_val=df_g3b.loc[(df_g3b["HEADING"].str.contains("Cash Forward Charge",case=False,na=False)) & (df_g3b["Details / Field"]=="SGST"),m] if not df_g3b.empty else []
-        cash_tax=(float(cgst_val.values[0]) if len(cgst_val)>0 else 0.0)+(float(sgst_val.values[0]) if len(sgst_val)>0 else 0.0)
-        calc_interest = round(cash_tax * 0.18 * (days_late / 365.0), 2) if days_late > 0 else 0.0
-        interest_rows.append({
-            "Period": m,
-            "Days Delayed": days_late,
-            "Net Cash Tax Paid": cash_tax,
-            "Interest Payable (18%)": calc_interest,
-            "Status": "Action Needed" if calc_interest > 0 else "Satisfactory"
-        })
-    output_sheets["10. Delayed Interest Audit"] = pd.DataFrame(interest_rows)
-
-    # --- Save Final Combined Report ---
+    # --- Safeguard: ensure at least one sheet ---
     if not output_sheets:
-        output_sheets["Info"] = pd.DataFrame([{"Message": "No GST data files found"}])
+        output_sheets["Info"] = pd.DataFrame([{"Message":"No GST data files found"}])
 
+    # --- Save workbook ---
     print("\n📁 Saving unified sheets to Excel...")
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         for sheet_name, df_data in output_sheets.items():
@@ -137,8 +63,3 @@ def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xls
 
     print(f"\n🎉 SUCCESS! Unified Consolidated Audit workbook created at: {output_path}")
     return output_path
-
-
-# Run the consolidation
-#execute_unified_consolidation()
-
