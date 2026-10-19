@@ -11,22 +11,19 @@ st.set_page_config(
 )
 
 st.title("📊 GST Returns Comparison & Multi-Sheet Audit App")
-st.markdown("Upload your monthly and annual GST return PDFs, run reconciliation models, and download auditor-ready Excel workbooks.")
+st.markdown("Upload your monthly and annual GST return PDFs or schedules, run all reconciliation models, and download auditor-ready Excel workbooks.")
 
-# Tabs
-tab_upload, tab_summary, tab_analytics, tab_download = st.tabs([
-    "📁 Upload Documents",
-    "📊 Summary Dashboard",
-    "📑 Detailed Audit Schedules",
-    "📥 Download Report"
+tab_upload, tab_analytics, tab_download = st.tabs([
+    "📁 Document Upload Panel", 
+    "📊 Audit Algorithms & Analytics", 
+    "📥 Download Auditor-Ready Excel Working Papers"
 ])
 
-# ---------------- Upload Tab ----------------
 with tab_upload:
     st.subheader("Upload Monthly & Annual GST Returns")
     uploaded_files = st.file_uploader(
-        "Upload GSTR PDFs (1, 2B, 3B, 9)",
-        type=["pdf"],
+        "Upload GSTR PDFs, GSTR-2B/3B Excel files, or GSTR-9 working papers", 
+        type=["pdf", "xlsx"], 
         accept_multiple_files=True
     )
 
@@ -36,79 +33,66 @@ with tab_upload:
             file_path = os.path.join("data", uploaded_file.name)
             with open(file_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
-        st.success(f"Uploaded {len(uploaded_files)} file(s)!")
+        st.success(f"Successfully uploaded {len(uploaded_files)} file(s)!")
 
-    if st.button("🚀 Run Consolidation", type="primary"):
+    if st.button("🚀 Execute Master Audit Consolidation", type="primary"):
         output_file = "GST_Consolidated_Audit_Report.xlsx"
-        with st.spinner("Processing files and building audit schedules..."):
+        with st.spinner("Processing files, building consolidated schedules, and running audit algorithms..."):
             try:
                 report_path = execute_unified_consolidation(output_path=output_file)
                 st.session_state["report_ready"] = True
                 st.session_state["output_file"] = report_path
-                st.success("Consolidation complete!")
+                st.success("Consolidation and audit analysis complete!")
             except Exception as e:
                 st.error(f"Error during consolidation: {e}")
 
-# ---------------- Summary Dashboard Tab ----------------
-with tab_summary:
-    st.subheader("📊 Consolidated Summary Dashboard")
-    output_file = "GST_Consolidated_Audit_Report.xlsx"
-    if os.path.exists(output_file):
-        xls = pd.ExcelFile(output_file)
-        if "Summary Dashboard" in xls.sheet_names:
-            df_summary = pd.read_excel(xls, sheet_name="Summary Dashboard")
-            st.dataframe(df_summary, use_container_width=True)
-
-            # KPIs
-            cols = st.columns(len(df_summary))
-            for i, row in df_summary.iterrows():
-                cols[i].metric(label=row["Metric"], value=row["Value"])
-
-            # Charts: Monthly deviations from ITC Supplier Recon
-            if "1. ITC Supplier Recon" in xls.sheet_names:
-                df_recon = pd.read_excel(xls, sheet_name="1. ITC Supplier Recon")
-                chart = alt.Chart(df_recon).mark_bar(color="orange").encode(
-                    x=alt.X("Period", sort=None),
-                    y="Deviation",
-                    tooltip=["Period", "Deviation", "Risk Status"]
-                ).properties(title="Excess ITC Availment vs 2B")
-                st.altair_chart(chart, use_container_width=True)
-
-            # Charts: ITC composition pie chart
-            if "GSTR-2B Summary (12M)" in xls.sheet_names:
-                df_itc = pd.read_excel(xls, sheet_name="GSTR-2B Summary (12M)")
-                totals = df_itc.groupby("Details / Field").sum(numeric_only=True).reset_index()
-                pie = alt.Chart(totals).mark_arc().encode(
-                    theta="FY TOTAL",
-                    color="Details / Field",
-                    tooltip=["Details / Field", "FY TOTAL"]
-                ).properties(title="ITC Composition (2B)")
-                st.altair_chart(pie, use_container_width=True)
-
-# ---------------- Detailed Analytics Tab ----------------
 with tab_analytics:
-    st.subheader("🔍 Detailed Audit Schedules")
+    st.subheader("🔍 Audit & Compliance Reconciliation Schedules")
+    
     output_file = "GST_Consolidated_Audit_Report.xlsx"
+    if not os.path.exists(output_file):
+        execute_unified_consolidation(output_path=output_file)
+        st.session_state["report_ready"] = True
+
     if os.path.exists(output_file):
         xls = pd.ExcelFile(output_file)
-        selected_schedule = st.selectbox("Select Audit Schedule:", xls.sheet_names)
+        selected_schedule = st.selectbox("Select Audit Schedule to Inspect:", xls.sheet_names)
+        
         if selected_schedule:
             df_display = pd.read_excel(xls, sheet_name=selected_schedule)
             st.markdown(f"### Schedule View: `{selected_schedule}`")
+            
+            # Render Altair chart safely if it's the Supplier Recon schedule
+            if selected_schedule == "1. ITC Supplier Recon" and not df_display.empty:
+                try:
+                    df_display["Deviation"] = pd.to_numeric(df_display["Deviation"], errors="coerce").fillna(0.0)
+                    chart = alt.Chart(df_display).mark_bar().encode(
+                        x=alt.X("Period:N", sort=None),
+                        y=alt.Y("Deviation:Q", title="Excess Availment Deviation"),
+                        color="RiskStatus:N" if "Risk Status" in df_display.columns else alt.value("steelblue"),
+                        tooltip=["Period", "Deviation"]
+                    ).properties(title="Excess ITC Availment vs 2B")
+                    st.altair_chart(chart, use_container_width=True)
+                except Exception:
+                    pass
+
             st.dataframe(df_display, use_container_width=True)
 
-# ---------------- Download Tab ----------------
 with tab_download:
-    st.subheader("📥 Download Auditor-Ready Excel Report")
+    st.subheader("📥 Download Auditor-Ready Excel Working Papers")
     output_file = "GST_Consolidated_Audit_Report.xlsx"
+    
+    if not os.path.exists(output_file):
+        execute_unified_consolidation(output_path=output_file)
+        
     if os.path.exists(output_file):
         with open(output_file, "rb") as f:
             st.download_button(
-                label="⬇️ Download Full Audit Report (.xlsx)",
+                label="⬇️ Download Complete Multi-Sheet Audit Report (.xlsx)",
                 data=f,
                 file_name="GST_Consolidated_Audit_Report.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 type="primary"
             )
     else:
-        st.error("Report file not found. Please run consolidation first.")
+        st.error("Report file not found. Please run the consolidation pipeline first.")
