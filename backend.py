@@ -36,9 +36,15 @@ def get_month_key(filename):
 # =========================================
 # UNIFIED CONSOLIDATION PIPELINE
 # =========================================
-def execute_unified_consolidation(output_path="/GST_Consolidated_Audit_Report.xlsx"):
-    MONTHS = ["APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC","JAN","FEB","MAR"]
-    output_sheets = {}
+def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"):
+    ...
+    with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+        for sheet_name, df_data in output_sheets.items():
+            df_data.to_excel(writer, sheet_name=sheet_name, index=False)
+            print(f"Included Sheet: {sheet_name}")
+    print(f"✅ SUCCESS! Unified Consolidated Audit workbook created at: {output_path}")
+    return output_path
+
 
     # --- GSTR-1 ---
     g1_path = "/GSTR1_Consolidated_Schedules_SingleSheet.xlsx"
