@@ -12,7 +12,6 @@ def parse_gstr1_pdfs():
     layout = [
         ("4A - B2B Regular", ["Taxable Value","IGST","CGST","SGST","Cess"]),
         ("7 - B2CS (Others)", ["Net Value","IGST","CGST","SGST","Cess"]),
-        # Add other sections as needed...
     ]
     df = pd.DataFrame([{"Table Section": sec, "Details / Field": f, **{m:0.0 for m in MONTHS}} 
                        for sec, fields in layout for f in fields])
@@ -22,17 +21,24 @@ def parse_gstr1_pdfs():
                 full_text = "\n".join([p.extract_text() or "" for p in pdf.pages])
             col = get_month_key(os.path.basename(f_path), full_text)
             if col and col != "UNKNOWN":
-                # Example regex placeholder for B2B Regular
-                match_b2b = re.search(r"4A.*?Total.*?([\d,]+\.\d+)\s+([\d,]+\.\d+)", full_text, re.DOTALL)
+                # Match B2B Regular totals
+                match_b2b = re.search(
+                    r"4A.*B2B Regular.*?Total.*?Invoice\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)",
+                    full_text, re.DOTALL
+                )
                 if match_b2b:
-                    vals = [clean_value(match_b2b.group(i)) for i in range(1,3)]
-                    df.loc[(df["Table Section"]=="4A - B2B Regular") & (df["Details / Field"]=="Taxable Value"), col] = vals[0]
-                    df.loc[(df["Table Section"]=="4A - B2B Regular") & (df["Details / Field"]=="IGST"), col] = vals[1]
-                # Add more regex extractions for other sections...
+                    taxable, igst, cgst, sgst, cess = [clean_value(match_b2b.group(i)) for i in range(1,6)]
+                    df.loc[(df["Table Section"]=="4A - B2B Regular") & (df["Details / Field"]=="Taxable Value"), col] = taxable
+                    df.loc[(df["Table Section"]=="4A - B2B Regular") & (df["Details / Field"]=="IGST"), col] = igst
+                    df.loc[(df["Table Section"]=="4A - B2B Regular") & (df["Details / Field"]=="CGST"), col] = cgst
+                    df.loc[(df["Table Section"]=="4A - B2B Regular") & (df["Details / Field"]=="SGST"), col] = sgst
+                    df.loc[(df["Table Section"]=="4A - B2B Regular") & (df["Details / Field"]=="Cess"), col] = cess
+                # Add similar regex for B2CS if needed
         except Exception as e:
             print("Error parsing GSTR-1:", e)
     df["FY TOTAL"] = df[MONTHS].sum(axis=1)
     return df
+
 
 def parse_gstr2b_pdfs():
     """Parse GSTR-2B PDFs into a 12-month DataFrame."""
@@ -47,20 +53,26 @@ def parse_gstr2b_pdfs():
                 full_text = "\n".join([p.extract_text() or "" for p in pdf.pages])
             col = get_month_key(os.path.basename(f_path), full_text)
             if col and col != "UNKNOWN":
-                # Regex placeholder for IGST ITC
-                match_itc = re.search(r"Integrated Tax.*?([\d,]+\.\d+)", full_text)
+                match_itc = re.search(
+                    r"4\(A\)\(5\)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)",
+                    full_text
+                )
                 if match_itc:
-                    df.loc[(df["Details / Field"]=="IGST"), col] = clean_value(match_itc.group(1))
-                # Add regex for CGST, SGST, Cess...
+                    igst, cgst, sgst, cess = [clean_value(match_itc.group(i)) for i in range(1,5)]
+                    df.loc[(df["Details / Field"]=="IGST"), col] = igst
+                    df.loc[(df["Details / Field"]=="CGST"), col] = cgst
+                    df.loc[(df["Details / Field"]=="SGST"), col] = sgst
+                    df.loc[(df["Details / Field"]=="Cess"), col] = cess
         except Exception as e:
             print("Error parsing GSTR-2B:", e)
     df["FY TOTAL"] = df[MONTHS].sum(axis=1)
     return df
 
+
 def parse_gstr3b_pdfs():
     """Parse GSTR-3B PDFs into a 12-month DataFrame."""
     layout = [
-        ("3.1 Tax Liability", ["IGST","CGST","SGST","Cess"]),
+        ("3.1 Tax Liability", ["Taxable Value","IGST","CGST","SGST","Cess"]),
         ("4A ITC Availed", ["IGST","CGST","SGST","Cess"]),
         ("Late Filing", ["No. of days late"])
     ]
@@ -72,17 +84,24 @@ def parse_gstr3b_pdfs():
                 full_text = "\n".join([p.extract_text() or "" for p in pdf.pages])
             col = get_month_key(os.path.basename(f_path), full_text)
             if col and col != "UNKNOWN":
-                # Regex placeholder for liability
-                match_liab = re.search(r"Total Tax Liability.*?([\d,]+\.\d+)", full_text)
+                match_liab = re.search(
+                    r"Outward taxable supplies.*?([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)",
+                    full_text
+                )
                 if match_liab:
-                    df.loc[(df["HEADING"]=="3.1 Tax Liability") & (df["Details / Field"]=="IGST"), col] = clean_value(match_liab.group(1))
-                # Regex placeholder for days late
+                    taxable, igst, cgst, sgst, cess = [clean_value(match_liab.group(i)) for i in range(1,6)]
+                    df.loc[(df["HEADING"]=="3.1 Tax Liability") & (df["Details / Field"]=="Taxable Value"), col] = taxable
+                    df.loc[(df["HEADING"]=="3.1 Tax Liability") & (df["Details / Field"]=="IGST"), col] = igst
+                    df.loc[(df["HEADING"]=="3.1 Tax Liability") & (df["Details / Field"]=="CGST"), col] = cgst
+                    df.loc[(df["HEADING"]=="3.1 Tax Liability") & (df["Details / Field"]=="SGST"), col] = sgst
+                    df.loc[(df["HEADING"]=="3.1 Tax Liability") & (df["Details / Field"]=="Cess"), col] = cess
                 match_late = re.search(r"No\. of days late.*?(\d+)", full_text)
                 if match_late:
                     df.loc[(df["Details / Field"]=="No. of days late"), col] = clean_value(match_late.group(1))
         except Exception as e:
             print("Error parsing GSTR-3B:", e)
     return df
+
 
 def parse_gstr9_pdfs():
     """Parse GSTR-9 PDFs into a multi-year DataFrame."""
@@ -92,14 +111,16 @@ def parse_gstr9_pdfs():
         data = {"Financial Year": fy, "Table 4 - B2B Supplies":0.0, "Table 6A - Total ITC Availed":0.0, "Table 7I - Total ITC Reversed":0.0}
         try:
             with pdfplumber.open(f_path) as pdf:
-                for page in pdf.pages:
-                    text = page.extract_text() or ""
-                    m1 = re.search(r"B2B.*?([\d,]+\.\d{2})", text)
-                    if m1: data["Table 4 - B2B Supplies"] = clean_value(m1.group(1))
-                    m2 = re.search(r"(?:6A|Total ITC Availed).*?([\d,]+\.\d{2})", text)
-                    if m2: data["Table 6A - Total ITC Availed"] = clean_value(m2.group(1))
-                    m3 = re.search(r"(?:7I|Total ITC Reversed).*?([\d,]+\.\d{2})", text)
-                    if m3: data["Table 7I - Total ITC Reversed"] = clean_value(m3.group(1))
+                full_text = "\n".join([p.extract_text() or "" for p in pdf.pages])
+                match_b2b = re.search(
+                    r"B Supplies made to registered persons.*?([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)",
+                    full_text
+                )
+                if match_b2b:
+                    taxable, cgst, sgst, igst, cess = [clean_value(match_b2b.group(i)) for i in range(1,6)]
+                    data["Table 4 - B2B Supplies"] = taxable
+                    data["Table 6A - Total ITC Availed"] = igst  # adjust mapping if needed
+                    data["Table 7I - Total ITC Reversed"] = cgst + sgst
         except Exception as e:
             print("Error parsing GSTR-9:", e)
         records.append(data)
