@@ -193,3 +193,6 @@ def execute_final_consolidation(output_path="./GST_Consolidated_Audit_Report.xls
     print(f"\n🎉 SUCCESS! Unified Consolidated Audit workbook created at: {output_path}")
     return output_path
 
+print("DEBUG GSTR-9 text:", full_text[:500])
+
+
