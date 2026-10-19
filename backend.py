@@ -1,3 +1,12 @@
+import os
+import re
+import glob
+import pdfplumber
+import pandas as pd
+import numpy as np
+import openpyxl
+from pypdf import PdfReader
+
 def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"):
     MONTHS = ["APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC","JAN","FEB","MAR"]
     output_sheets = {}
