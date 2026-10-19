@@ -23,15 +23,15 @@ def clean_value(val):
     return 0.0
 
 # =========================================================
-# 2. MASTER AUDIT CONSOLIDATION PIPELINE
+# 2. MASTER CONSOLIDATION & AUDIT PIPELINE
 # =========================================================
 def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"):
     MONTHS = ["APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC", "JAN", "FEB", "MAR"]
     output_sheets = {}
     data_dir = "data" if os.path.exists("data") else "."
 
-    def load_schedule(keywords, default_df):
-        """Searches uploaded files for matching consolidation schedules."""
+    def load_schedule_safely(keywords, default_df):
+        """Safely loads schedule from uploaded files or falls back to default empty structure."""
         all_files = glob.glob(os.path.join(data_dir, "*.*")) + glob.glob("*.*")
         for f in all_files:
             fname = os.path.basename(f).upper()
@@ -59,28 +59,28 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
     # ---------------------------------------------------------
     print("⚙️ Compiling GSTR-1 Summary...")
     g1_default = pd.DataFrame(columns=["Table Section", "Details / Field"] + MONTHS + ["FY TOTAL"])
-    output_sheets["GSTR-1 Summary (12M)"] = load_schedule(["GSTR1", "GSTR-1", "GSTR_1"], g1_default)
+    output_sheets["GSTR-1 Summary (12M)"] = load_schedule_safely(["GSTR1", "GSTR-1", "GSTR_1"], g1_default)
 
     # ---------------------------------------------------------
     # 2. GSTR-2B SUMMARY (12M)
     # ---------------------------------------------------------
     print("⚙️ Compiling GSTR-2B Summary...")
     g2b_default = pd.DataFrame(columns=["Table Section", "Details / Field"] + MONTHS + ["FY TOTAL"])
-    output_sheets["GSTR-2B Summary (12M)"] = load_schedule(["GSTR2B", "GSTR-2B", "2B"], g2b_default)
+    output_sheets["GSTR-2B Summary (12M)"] = load_schedule_safely(["GSTR2B", "GSTR-2B", "2B"], g2b_default)
 
     # ---------------------------------------------------------
     # 3. GSTR-3B SUMMARY (12M)
     # ---------------------------------------------------------
     print("⚙️ Compiling GSTR-3B Summary...")
     g3b_default = pd.DataFrame(columns=["HEADING", "Details / Field"] + MONTHS + ["FY TOTAL"])
-    output_sheets["GSTR-3B Summary (12M)"] = load_schedule(["GSTR3B", "GSTR-3B", "3B"], g3b_default)
+    output_sheets["GSTR-3B Summary (12M)"] = load_schedule_safely(["GSTR3B", "GSTR-3B", "3B"], g3b_default)
 
     # ---------------------------------------------------------
     # 4. GSTR-9 SUMMARY (Multi-Year)
     # ---------------------------------------------------------
     print("⚙️ Compiling GSTR-9 Summary...")
     g9_default = pd.DataFrame(columns=["Financial Year", "Table 4 - B2B Supplies", "Table 6A - Total ITC Availed", "Table 7I - Total ITC Reversed"])
-    output_sheets["GSTR-9 Summary (2 Year)"] = load_schedule(["GSTR9", "GSTR-9", "WORKING_PAPERS", "COMPARATIVE"], g9_default)
+    output_sheets["GSTR-9 Summary (2 Year)"] = load_schedule_safely(["GSTR9", "GSTR-9", "WORKING_PAPERS", "COMPARATIVE"], g9_default)
 
     # Shortcuts for audit calculations
     df_g3b = output_sheets["GSTR-3B Summary (12M)"]
@@ -115,7 +115,7 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
         })
     output_sheets["1. ITC Supplier Recon"] = pd.DataFrame(recon_rows)
 
-    # 2 to 9 Working Papers
+    # Working Papers 2 to 9
     output_sheets["2. ITC Reclaim Audit"] = pd.DataFrame([{"Period": m, "Reclaimed ITC (Table 4D1)": 0.0, "Reversals Declared": 0.0, "Deviation": 0.0, "Status": "Clean"} for m in MONTHS])
     output_sheets["3. RCM ITC vs Liability"] = pd.DataFrame([{"Period": m, "RCM ITC Availed (3B 4A3)": 0.0, "RCM Liability (3.1d)": 0.0, "Deviation": 0.0, "Status": "Clean"} for m in MONTHS])
     output_sheets["4. RCM Historical Trail"] = pd.DataFrame([{"Historical RCM Trail": 0.0, "Opening Balance": 0.0, "Deviation": 0.0, "Status": "Clean"}])
