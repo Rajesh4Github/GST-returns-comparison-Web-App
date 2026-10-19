@@ -79,7 +79,6 @@ def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xls
                 df_data.to_excel(writer, sheet_name=sheet_name, index=False)
                 print(f"   -> Included Sheet: '{sheet_name}'")
             else:
-                # Always add a dummy sheet if empty
                 pd.DataFrame([{"Message": "No data"}]).to_excel(writer, sheet_name=sheet_name, index=False)
 
     print(f"\n🎉 SUCCESS! Unified Consolidated Audit workbook created at: {output_path}")
