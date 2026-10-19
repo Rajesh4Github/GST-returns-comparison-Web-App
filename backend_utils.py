@@ -1,11 +1,7 @@
-import os, re, glob
-import pandas as pd
-import pdfplumber
+import os, re
 
-# =========================================
-# COMMON UTILITY FUNCTIONS
-# =========================================
 def clean_value(val):
+    """Convert raw cell values into floats safely."""
     if val is None:
         return 0.0
     val_str = str(val).replace(",", "").replace(" ", "").replace("\n", "").strip()
@@ -22,6 +18,7 @@ def clean_value(val):
     return 0.0
 
 def get_month_key(filename):
+    """Extract month key from filename like _042024 → APR."""
     match = re.search(r"_(\d{2})\d{4}", filename)
     if match:
         m_num = match.group(1)
