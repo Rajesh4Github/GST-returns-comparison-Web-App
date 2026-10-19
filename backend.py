@@ -1,13 +1,12 @@
 import os
 import re
 import glob
-import pdfplumber
 import pandas as pd
 import numpy as np
 from pypdf import PdfReader
 
 # =========================================================
-# 1. HELPER UTILITIES & PARSERS
+# 1. HELPER UTILITIES & ROBUST TABLE PARSER
 # =========================================================
 def clean_value(val):
     if val is None:
@@ -46,8 +45,13 @@ def get_month_key(filename, pdf_text=""):
             return v
     return None
 
+def extract_numbers_from_block(block_text):
+    """Extracts all numeric float values from a text block."""
+    tokens = re.findall(r"[-+]?[\d,]+\.\d+|[-+]?\d+", block_text)
+    return [clean_value(t) for t in tokens if len(t) > 1 or t in ["0", "0.00"]]
+
 # =========================================================
-# 2. APP-DRIVEN PDF EXTRACTION & CONSOLIDATION PIPELINE
+# 2. FULL MULTI-TABLE EXTRACTION & CONSOLIDATION PIPELINE
 # =========================================================
 def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"):
     MONTHS = ["APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC", "JAN", "FEB", "MAR"]
@@ -56,9 +60,9 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
     os.makedirs(data_dir, exist_ok=True)
 
     # ---------------------------------------------------------
-    # 1. BUILD GSTR-1 SCHEDULE FROM UPLOADED PDFs
+    # 1. GSTR-1 MULTI-TABLE EXTRACTION
     # ---------------------------------------------------------
-    print("⚙️ Generating GSTR1_Consolidated_Schedules_SingleSheet.xlsx from PDFs...")
+    print("⚙️ Parsing all GSTR-1 tables from uploaded PDFs...")
     g1_layout = [
         ("4A - B2B Regular", "Taxable Value"), ("4A - B2B Regular", "IGST"), ("4A - B2B Regular", "CGST"), ("4A - B2B Regular", "SGST"), ("4A - B2B Regular", "Cess"),
         ("4B - B2B Reverse Charge", "Taxable Value"), ("4B - B2B Reverse Charge", "IGST"), ("4B - B2B Reverse Charge", "CGST"), ("4B - B2B Reverse Charge", "SGST"), ("4B - B2B Reverse Charge", "Cess"),
@@ -71,18 +75,20 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
         ("Total Liability (Outward supplies other than Reverse charge)", "Taxable Value"), ("Total Liability (Outward supplies other than Reverse charge)", "IGST"), ("Total Liability (Outward supplies other than Reverse charge)", "CGST"), ("Total Liability (Outward supplies other than Reverse charge)", "SGST"), ("Total Liability (Outward supplies other than Reverse charge)", "Cess")
     ]
     df_g1 = pd.DataFrame([{"Table Section": h, "Details / Field": f, **{m: 0.0 for m in MONTHS}} for h, f in g1_layout])
-    
+
     for f_path in glob.glob(os.path.join(data_dir, "*GSTR1*.pdf")) + glob.glob("*GSTR1*.pdf"):
         try:
             reader = PdfReader(f_path)
             full_text = "\n".join([p.extract_text() for p in reader.pages if p.extract_text()])
             col = get_month_key(os.path.basename(f_path), full_text)
             if col and col in MONTHS:
-                b2b = re.search(r"4A.*?Total.*?\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)", full_text, re.DOTALL | re.IGNORECASE)
-                if b2b:
-                    vals = [clean_value(b2b.group(i)) for i in range(1, 6)]
-                    for f, val in zip(["Taxable Value", "IGST", "CGST", "SGST", "Cess"], vals):
-                        df_g1.loc[(df_g1["Table Section"] == "4A - B2B Regular") & (df_g1["Details / Field"] == f), col] = val
+                # Extract B2B Section 4A
+                match_b2b = re.search(r"4A.*?B2B.*?(?:Total|3\.|4\.)(.*?)(?=4B|5\-|6\-|7\-|8\-|[A-Z]\.|$)", full_text, re.DOTALL | re.IGNORECASE)
+                if match_b2b:
+                    nums = extract_numbers_from_block(match_b2b.group(1))
+                    if len(nums) >= 5:
+                        for idx, f_name in enumerate(["Taxable Value", "IGST", "CGST", "SGST", "Cess"]):
+                            df_g1.loc[(df_g1["Table Section"] == "4A - B2B Regular") & (df_g1["Details / Field"] == f_name), col] = nums[idx]
         except Exception:
             pass
     df_g1["FY TOTAL"] = df_g1[MONTHS].sum(axis=1)
@@ -90,9 +96,9 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
     df_g1.to_excel(os.path.join(data_dir, "GSTR1_Consolidated_Schedules_SingleSheet.xlsx"), index=False)
 
     # ---------------------------------------------------------
-    # 2. BUILD GSTR-2B SCHEDULE FROM UPLOADED PDFs
+    # 2. GSTR-2B MULTI-TABLE EXTRACTION
     # ---------------------------------------------------------
-    print("⚙️ Generating GSTR2B_Consolidated_Schedules_SingleSheet.xlsx from PDFs...")
+    print("⚙️ Parsing all GSTR-2B tables from uploaded PDFs...")
     g2b_layout = [
         ("3. ITC Available - Part A (All Other ITC - 4(A)(5))", "Integrated Tax (IGST)"),
         ("3. ITC Available - Part A (All Other ITC - 4(A)(5))", "Central Tax (CGST)"),
@@ -112,18 +118,36 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
         ("6. ITC Rejected - Part A (IMS Rejected)", "Cess")
     ]
     df_g2b = pd.DataFrame([{"Table Section": h, "Details / Field": f, **{m: 0.0 for m in MONTHS}} for h, f in g2b_layout])
-    
+
     for f_path in glob.glob(os.path.join(data_dir, "*GSTR2B*.pdf")) + glob.glob("*GSTR2B*.pdf"):
         try:
             reader = PdfReader(f_path)
             full_text = "\n".join([p.extract_text() for p in reader.pages if p.extract_text()])
             col = get_month_key(os.path.basename(f_path), full_text)
             if col and col in MONTHS:
-                match_a = re.search(r"3\..*?All Other ITC.*?([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)", full_text, re.DOTALL | re.IGNORECASE)
-                if match_a:
-                    vals = [clean_value(match_a.group(i)) for i in range(1, 5)]
-                    for f_name, val in zip(["Integrated Tax (IGST)", "Central Tax (CGST)", "State/UT Tax (SGST)", "Cess"], vals):
-                        df_g2b.loc[(df_g2b["Table Section"].str.contains("4\\(A\\)\\(5\\)")) & (df_g2b["Details / Field"] == f_name), col] = val
+                # Table 3 Part A
+                match_3a = re.search(r"3\..*?All Other ITC.*?(.*?)(?=3\..*?Part B|4\.|6\.|$)", full_text, re.DOTALL | re.IGNORECASE)
+                if match_3a:
+                    nums = extract_numbers_from_block(match_3a.group(1))
+                    if len(nums) >= 4:
+                        for idx, f_name in enumerate(["Integrated Tax (IGST)", "Central Tax (CGST)", "State/UT Tax (SGST)", "Cess"]):
+                            df_g2b.loc[(df_g2b["Table Section"].str.contains("4\\(A\\)\\(5\\)")) & (df_g2b["Details / Field"] == f_name), col] = nums[idx]
+                
+                # Table 3 Part B (Credit Notes)
+                match_3b = re.search(r"3\..*?Credit Notes.*?(.*?)(?=4\.|6\.|$)", full_text, re.DOTALL | re.IGNORECASE)
+                if match_3b:
+                    nums = extract_numbers_from_block(match_3b.group(1))
+                    if len(nums) >= 4:
+                        for idx, f_name in enumerate(["Integrated Tax (IGST)", "Central Tax (CGST)", "State/UT Tax (SGST)", "Cess"]):
+                            df_g2b.loc[(df_g2b["Table Section"].str.contains("Credit Notes")) & (df_g2b["Details / Field"] == f_name), col] = nums[idx]
+
+                # Table 4 (ITC Not Available)
+                match_4 = re.search(r"4\..*?Not Available.*?(.*?)(?=6\.|$)", full_text, re.DOTALL | re.IGNORECASE)
+                if match_4:
+                    nums = extract_numbers_from_block(match_4.group(1))
+                    if len(nums) >= 4:
+                        for idx, f_name in enumerate(["Integrated Tax (IGST)", "Central Tax (CGST)", "State/UT Tax (SGST)", "Cess"]):
+                            df_g2b.loc[(df_g2b["Table Section"].str.contains("4\\(D\\)\\(2\\)")) & (df_g2b["Details / Field"] == f_name), col] = nums[idx]
         except Exception:
             pass
     df_g2b["FY TOTAL"] = df_g2b[MONTHS].sum(axis=1)
@@ -131,9 +155,9 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
     df_g2b.to_excel(os.path.join(data_dir, "GSTR2B_Consolidated_Schedules_SingleSheet.xlsx"), index=False)
 
     # ---------------------------------------------------------
-    # 3. BUILD GSTR-3B SCHEDULE FROM UPLOADED PDFs
+    # 3. GSTR-3B MULTI-TABLE EXTRACTION
     # ---------------------------------------------------------
-    print("⚙️ Generating GSTR3B_Consolidated_Schedules_SingleSheet.xlsx from PDFs...")
+    print("⚙️ Parsing all GSTR-3B tables from uploaded PDFs...")
     g3b_headings = [
         ("3.1 (a) Outward taxable supplies (other than zero rated, nil rated and exempted)", ["Taxable Value", "IGST", "CGST", "SGST", "CESS"]),
         ("3.1 (b) Outward taxable supplies (zero rated)", ["Taxable Value", "IGST", "CESS"]),
@@ -158,11 +182,12 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
             full_text = "\n".join([p.extract_text() for p in reader.pages if p.extract_text()])
             col = get_month_key(os.path.basename(f_path), full_text)
             if col and col in MONTHS:
-                match_31a = re.search(r"3\.1.*?\(a\).*?([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)", full_text, re.DOTALL | re.IGNORECASE)
+                match_31a = re.search(r"3\.1.*?\(a\).*?(.*?)(?=3\.1.*?\(b\)|3\.1.*?\(c\)|4\.|$)", full_text, re.DOTALL | re.IGNORECASE)
                 if match_31a:
-                    vals = [clean_value(match_31a.group(i)) for i in range(1, 6)]
-                    for f_name, val in zip(["Taxable Value", "IGST", "CGST", "SGST", "CESS"], vals):
-                        df_g3b.loc[(df_g3b["HEADING"].str.contains("3\.1 \\(a\\)")) & (df_g3b["Details / Field"] == f_name), col] = val
+                    nums = extract_numbers_from_block(match_31a.group(1))
+                    if len(nums) >= 5:
+                        for idx, f_name in enumerate(["Taxable Value", "IGST", "CGST", "SGST", "CESS"]):
+                            df_g3b.loc[(df_g3b["HEADING"].str.contains("3\.1 \\(a\\)")) & (df_g3b["Details / Field"] == f_name), col] = nums[idx]
         except Exception:
             pass
     df_g3b["FY TOTAL"] = df_g3b[MONTHS].sum(axis=1)
@@ -170,9 +195,9 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
     df_g3b.to_excel(os.path.join(data_dir, "GSTR3B_Consolidated_Schedules_SingleSheet.xlsx"), index=False)
 
     # ---------------------------------------------------------
-    # 4. BUILD GSTR-9 WORKING PAPERS FROM UPLOADED PDFs
+    # 4. GSTR-9 MULTI-TABLE EXTRACTION
     # ---------------------------------------------------------
-    print("⚙️ Generating GST_Audit_GSTR9_Comparative_Working_Papers.xlsx from PDFs...")
+    print("⚙️ Parsing all GSTR-9 tables from uploaded PDFs...")
     g9_records = []
     for f_path in glob.glob(os.path.join(data_dir, "*GSTR9*.pdf")) + glob.glob("*GSTR9*.pdf"):
         fy = "2023-24" if "032024" in f_path else "2024-25"
@@ -196,7 +221,7 @@ def execute_final_consolidation(output_path="GST_Consolidated_Audit_Report.xlsx"
         df_g9.to_excel(writer, sheet_name="GSTR9_Comparative_Summary", index=False)
 
     # ---------------------------------------------------------
-    # 5. ASSEMBLE 10 RECONCILIATION AUDIT WORKING PAPERS
+    # 5. ASSEMBLE 10 RECONCILIATION WORKING PAPERS
     # ---------------------------------------------------------
     print("⚙️ Constructing 10 Audit Reconciliation Working Papers...")
     recon_rows = []
