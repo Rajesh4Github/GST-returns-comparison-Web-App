@@ -5,18 +5,14 @@ from backend import execute_final_consolidation
 
 st.title("GST Returns Consolidation & Audit")
 
-uploaded_files = st.file_uploader(
-    "Upload your GSTR returns (PDF/Excel)", 
-    type=["pdf","xlsx"], 
-    accept_multiple_files=True
-)
-
+uploaded_files = st.file_uploader("Upload GSTR PDFs/Excels", type=["pdf","xlsx"], accept_multiple_files=True)
 if uploaded_files:
     os.makedirs("uploads", exist_ok=True)
     for f in uploaded_files:
         with open(os.path.join("uploads", f.name), "wb") as out:
             out.write(f.read())
     st.success(f"Uploaded {len(uploaded_files)} files successfully!")
+
 
 if st.button("Run Consolidation"):
     output_file = execute_final_consolidation()
