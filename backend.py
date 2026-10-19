@@ -126,6 +126,9 @@ def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xls
     output_sheets["10. Delayed Interest Audit"] = pd.DataFrame(interest_rows)
 
     # --- Save Final Combined Report ---
+    if not output_sheets:
+        output_sheets["Info"] = pd.DataFrame([{"Message": "No GST data files found"}])
+
     print("\n📁 Saving unified sheets to Excel...")
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         for sheet_name, df_data in output_sheets.items():
@@ -135,6 +138,7 @@ def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xls
     print(f"\n🎉 SUCCESS! Unified Consolidated Audit workbook created at: {output_path}")
     return output_path
 
+
 # Run the consolidation
-execute_unified_consolidation()
+#execute_unified_consolidation()
 
