@@ -124,7 +124,7 @@ def execute_unified_consolidation(output_path="GST_Consolidated_Audit_Report.xls
         ("6. ITC Rejected - Part A (IMS Rejected)","Cess")
     ]
     df_g2b = pd.DataFrame([{"Table Section":h,"Details / Field":f,**{m:0.0 for m in MONTHS}} for h,f in gstr2b_layout])
-        for f_path in glob.glob(os.path.join(data_dir,"*GSTR2B*.pdf")):
+    for f_path in glob.glob(os.path.join(data_dir,"*GSTR2B*.pdf")):
         reader=PdfReader(f_path)
         full_text="\n".join([p.extract_text() for p in reader.pages if p.extract_text()])
         col=get_month_key(os.path.basename(f_path),full_text)
